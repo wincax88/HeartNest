@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import type { MoodId, MoodRecord } from '@/domain/models'
-import { reviewDays } from '@/mocks/reviews'
+import { initialMemories, reviewDays } from '@/mocks/reviews'
 
 export const useReviewStore = defineStore('review', {
   state: () => ({
     reviewDays: [...reviewDays],
+    memories: [...initialMemories],
     localRecords: [] as MoodRecord[],
   }),
   actions: {

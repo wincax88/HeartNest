@@ -11,7 +11,8 @@ const appStore = useAppStore()
 const companion = computed(() => companionById[appStore.selectedCompanionId])
 
 const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
-const routeId = currentPages.at(-1)?.options?.id as CompanionId | undefined
+const currentPage = currentPages[currentPages.length - 1] as { options?: Record<string, string> } | undefined
+const routeId = currentPage?.options?.id as CompanionId | undefined
 if (routeId && companionById[routeId]) appStore.selectCompanion(routeId)
 
 function goBack() {

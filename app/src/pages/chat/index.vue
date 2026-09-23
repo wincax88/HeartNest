@@ -12,7 +12,8 @@ const draft = ref('')
 const companion = computed(() => companionById[chatStore.companionId])
 
 const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
-const routeId = currentPages.at(-1)?.options?.id as CompanionId | undefined
+const currentPage = currentPages[currentPages.length - 1] as { options?: Record<string, string> } | undefined
+const routeId = currentPage?.options?.id as CompanionId | undefined
 if (routeId && companionById[routeId]) chatStore.companionId = routeId
 
 if (chatStore.messages.length === 0) {
@@ -29,6 +30,10 @@ async function send() {
   await chatStore.send(content)
   await nextTick()
 }
+
+function goBack() {
+  uni.navigateBack()
+}
 </script>
 
 <template>
@@ -36,7 +41,7 @@ async function send() {
     <image class="hn-night-bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" />
     <view class="chat-shade" />
     <view class="chat-page">
-      <HnAppHeader back :title="companion.name" subtitle="在线 · 正在陪伴" @back="uni.navigateBack()">
+      <HnAppHeader back :title="companion.name" subtitle="在线 · 正在陪伴" @back="goBack">
         <image class="header-avatar" :src="companion.avatar" mode="aspectFill" />
       </HnAppHeader>
 
