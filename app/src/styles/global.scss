@@ -1,0 +1,94 @@
+@use './tokens.scss' as *;
+
+page {
+  min-height: 100%;
+  background: $hn-bg-deep;
+  color: $hn-text;
+  font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+view,
+text,
+button,
+input,
+textarea,
+scroll-view,
+swiper,
+swiper-item,
+image {
+  box-sizing: border-box;
+}
+
+button::after {
+  border: 0;
+}
+
+.hn-screen {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: $hn-bg-deep;
+}
+
+.hn-page {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 786rpx;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: calc(var(--status-bar-height, 24px) + 24rpx) 36rpx calc(150rpx + env(safe-area-inset-bottom));
+}
+
+.hn-night-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.46;
+}
+
+.hn-night-shade {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4, 10, 31, 0.08), rgba(4, 10, 31, 0.8) 45%, #050d22 100%);
+  pointer-events: none;
+}
+
+.hn-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin: 34rpx 4rpx 20rpx;
+  font-size: 34rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+}
+
+.hn-section-title::before {
+  content: '';
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: $hn-peach;
+  box-shadow: 0 0 22rpx $hn-peach;
+}
+
+.hn-muted {
+  color: $hn-text-muted;
+}
+
+@media (min-width: 820px) {
+  body {
+    background: #020615;
+  }
+
+  uni-page-body,
+  #app {
+    width: 430px;
+    min-height: 100vh;
+    margin: 0 auto;
+    box-shadow: 0 0 90px rgba(63, 63, 130, 0.28);
+  }
+}
