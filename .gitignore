@@ -6,3 +6,4 @@ unpackage/
 .env
 .env.*
 coverage/
+artifacts/

@@ -92,7 +92,7 @@ function goBack() {
 .chat-screen { background: #050d20; }
 .chat-shade { position: fixed; inset: 0; background: linear-gradient(180deg, rgba(6, 13, 38, 0.62), rgba(5, 13, 32, 0.9) 48%, #050d20 100%); }
 .chat-page { position: relative; z-index: 2; display: grid; grid-template-rows: auto 1fr auto; width: 100%; max-width: 786rpx; height: 100vh; margin: 0 auto; padding: calc(var(--status-bar-height, 24px) + 12rpx) 28rpx env(safe-area-inset-bottom); }
-.header-avatar { order: -1; width: 68rpx; height: 68rpx; border: 2rpx solid rgba(255, 225, 239, 0.56); border-radius: 50%; }
+.header-avatar { width: 68rpx; height: 68rpx; border: 2rpx solid rgba(255, 225, 239, 0.56); border-radius: 50%; }
 .message-list { height: 100%; min-height: 0; padding: 8rpx 4rpx 28rpx; }
 .date-divider { display: flex; justify-content: center; margin: 20rpx 0; }
 .date-divider text { padding: 8rpx 20rpx; border-radius: 22rpx; color: #9ca7c8; font-size: 18rpx; background: rgba(30, 41, 81, 0.5); }

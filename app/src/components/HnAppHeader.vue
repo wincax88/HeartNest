@@ -8,11 +8,11 @@ const emit = defineEmits<{ back: [] }>()
     <button v-if="back" class="app-header__back" aria-label="返回" @click="emit('back')">
       <uni-icons type="left" :size="28" color="#eef0ff" />
     </button>
+    <slot />
     <view class="app-header__copy">
       <text v-if="title" class="app-header__title">{{ title }}</text>
       <text v-if="subtitle" class="app-header__subtitle">{{ subtitle }}</text>
     </view>
-    <slot />
   </view>
 </template>
 

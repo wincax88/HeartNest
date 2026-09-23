@@ -14,5 +14,11 @@
     "backgroundColor": "#07142f",
     "backgroundColorTop": "#07142f",
     "backgroundColorBottom": "#07142f"
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^uni-icons$": "@/components/uni-icons/uni-icons.vue"
+    }
   }
 }
