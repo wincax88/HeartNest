@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue({
     template: {
       compilerOptions: {
-        isCustomElement: (tag) => tag.startsWith('uni-'),
+        isCustomElement: (tag) => tag.startsWith('uni-') || ['scroll-view', 'swiper', 'swiper-item'].includes(tag),
       },
     },
   })],
