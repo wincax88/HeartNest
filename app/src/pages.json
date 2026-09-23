@@ -1,0 +1,18 @@
+{
+  "pages": [
+    { "path": "pages/onboarding/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/home/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/companion/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/chat/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/review/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/settings/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/membership/index", "style": { "navigationStyle": "custom" } }
+  ],
+  "globalStyle": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#07142f",
+    "backgroundColorTop": "#07142f",
+    "backgroundColorBottom": "#07142f"
+  }
+}
