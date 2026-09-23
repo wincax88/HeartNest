@@ -10,7 +10,7 @@ pwsh deploy/publish.ps1 -Kubeconfig 'C:\Users\Admin\Documents\HeartNest\kubeconf
 pwsh deploy/verify.ps1 -Kubeconfig 'C:\Users\Admin\Documents\HeartNest\kubeconfig (1).yaml'
 ```
 
-计划访问地址：`https://heartnest-ns-i61rahoe.gzg.sealos.run/`。
+已验证访问地址：`https://heartnest-ns-i61rahoe.gzg.sealos.run/`。HTTP 与 HTTPS 均返回应用首页，HTTPS 使用 Sealos 的平台入口证书。
 
 ## 资源
 

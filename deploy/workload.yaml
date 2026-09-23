@@ -119,7 +119,10 @@ metadata:
   labels:
     app.kubernetes.io/name: heartnest-web
   annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
     nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   ingressClassName: nginx
   rules:
@@ -133,3 +136,7 @@ spec:
                 name: heartnest-web
                 port:
                   number: 80
+  tls:
+    - hosts:
+        - heartnest-ns-i61rahoe.gzg.sealos.run
+      secretName: wildcard-cert
