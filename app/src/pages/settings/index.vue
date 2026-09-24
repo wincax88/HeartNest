@@ -1,16 +1,65 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
+import type { AppPreferences } from '@/domain/models'
 import { useProfileStore } from '@/stores/profile'
 
 const profileStore = useProfileStore()
+
+const replyStyles: Array<{ id: AppPreferences['replyStyle']; label: string }> = [
+  { id: 'gentle', label: '温柔接纳' },
+  { id: 'concise', label: '简洁陪伴' },
+  { id: 'reflective', label: '轻柔复盘' },
+]
+
+const replyStyleLabel = computed(
+  () => replyStyles.find((item) => item.id === profileStore.preferences.replyStyle)?.label ?? '温柔接纳',
+)
 
 function toggleNotifications() {
   profileStore.setNotifications(!profileStore.preferences.notificationsEnabled)
 }
 
+function toggleMemoryPrompts() {
+  profileStore.setMemoryPrompts(!profileStore.preferences.memoryPromptsEnabled)
+}
+
+function openReplyStylePicker() {
+  uni.showActionSheet({
+    itemList: replyStyles.map((item) => item.label),
+    success: ({ tapIndex }) => {
+      const selected = replyStyles[tapIndex]
+      if (selected) profileStore.setReplyStyle(selected.id)
+    },
+  })
+}
+
+function openLocalDataInfo() {
+  uni.showModal({
+    title: '本地数据说明',
+    content: '当前 Demo 使用模拟数据，对话与偏好只保存在本机，不会上传真实内容。',
+    showCancel: false,
+    confirmText: '知道了',
+  })
+}
+
+function openHelpFeedback() {
+  uni.showModal({
+    title: '帮助与反馈',
+    content: '如果你愿意，可以告诉我们哪里还可以更温柔。当前 Demo 仅做本地提示，不会真正提交。',
+    showCancel: false,
+    confirmText: '好的',
+  })
+}
+
 function goBack() {
-  uni.navigateBack()
+  const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+  if (pages.length > 1) {
+    uni.navigateBack()
+    return
+  }
+  uni.reLaunch({ url: '/pages/profile/index' })
 }
 </script>
 
@@ -23,17 +72,39 @@ function goBack() {
         <HnGlassCard class="settings-card">
           <view class="setting-row">
             <view><text>温柔提醒</text><text>在你常用的夜间时段轻轻提醒</text></view>
-            <view data-testid="notification-toggle" class="toggle" :class="{ 'is-on': profileStore.preferences.notificationsEnabled }" @click="toggleNotifications"><view /></view>
+            <view
+              data-testid="notification-toggle"
+              class="toggle"
+              :class="{ 'is-on': profileStore.preferences.notificationsEnabled }"
+              @click="toggleNotifications"
+            ><view /></view>
           </view>
-          <view class="setting-row"><view><text>回应风格</text><text>温柔接纳</text></view><uni-icons type="right" :size="20" color="#9ba6c8" /></view>
-          <view class="setting-row"><view><text>记忆提示</text><text>在合适的时候询问是否记住</text></view><view class="toggle is-on"><view /></view></view>
+          <view data-testid="reply-style-row" class="setting-row is-action" @click="openReplyStylePicker">
+            <view><text>回应风格</text><text>{{ replyStyleLabel }}</text></view>
+            <uni-icons type="right" :size="20" color="#9ba6c8" />
+          </view>
+          <view class="setting-row">
+            <view><text>记忆提示</text><text>在合适的时候询问是否记住</text></view>
+            <view
+              data-testid="memory-prompt-toggle"
+              class="toggle"
+              :class="{ 'is-on': profileStore.preferences.memoryPromptsEnabled }"
+              @click="toggleMemoryPrompts"
+            ><view /></view>
+          </view>
         </HnGlassCard>
       </view>
       <view class="settings-group">
         <text class="group-title">隐私与支持</text>
         <HnGlassCard class="settings-card">
-          <view class="setting-row"><view><text>本地数据说明</text><text>当前版本使用模拟数据，不上传真实对话</text></view><uni-icons type="right" :size="20" color="#9ba6c8" /></view>
-          <view class="setting-row"><view><text>帮助与反馈</text><text>告诉我们哪里还可以更温柔</text></view><uni-icons type="right" :size="20" color="#9ba6c8" /></view>
+          <view data-testid="local-data-row" class="setting-row is-action" @click="openLocalDataInfo">
+            <view><text>本地数据说明</text><text>当前版本使用模拟数据，不上传真实对话</text></view>
+            <uni-icons type="right" :size="20" color="#9ba6c8" />
+          </view>
+          <view data-testid="help-feedback-row" class="setting-row is-action" @click="openHelpFeedback">
+            <view><text>帮助与反馈</text><text>告诉我们哪里还可以更温柔</text></view>
+            <uni-icons type="right" :size="20" color="#9ba6c8" />
+          </view>
         </HnGlassCard>
       </view>
       <text class="version">HeartNest 心栖 · Demo 1.0</text>
@@ -49,6 +120,7 @@ function goBack() {
 .settings-card { overflow: hidden; padding: 0 26rpx; }
 .setting-row { display: grid; grid-template-columns: 1fr auto; align-items: center; min-height: 126rpx; border-bottom: 1rpx solid rgba(187, 197, 239, 0.12); }
 .setting-row:last-child { border-bottom: 0; }
+.setting-row.is-action { cursor: pointer; }
 .setting-row > view:first-child { display: flex; flex-direction: column; gap: 8rpx; }
 .setting-row > view:first-child text:first-child { font-size: 26rpx; font-weight: 700; }
 .setting-row > view:first-child text:last-child { color: #98a3c4; font-size: 20rpx; }

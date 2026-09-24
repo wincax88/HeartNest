@@ -8,10 +8,28 @@ const profileStore = useProfileStore()
 const companion = companionById[profileStore.profile.preferredCompanionId]
 
 const menu = [
-  { icon: 'heart-filled', color: '#f2a7c9', title: '我的陪伴者', subtitle: `最常聊天 · ${companion.name}` },
-  { icon: 'calendar-filled', color: '#aeb8ff', title: '情绪日历', subtitle: '查看你的情绪足迹' },
-  { icon: 'star-filled', color: '#ffd09a', title: '我的收藏', subtitle: '被你留下的温柔片段' },
-]
+  {
+    id: 'companions',
+    icon: 'heart-filled',
+    color: '#f2a7c9',
+    title: '我的陪伴者',
+    subtitle: `最常聊天 · ${companion.name}`,
+  },
+  {
+    id: 'calendar',
+    icon: 'calendar-filled',
+    color: '#aeb8ff',
+    title: '情绪日历',
+    subtitle: '查看你的情绪足迹',
+  },
+  {
+    id: 'favorites',
+    icon: 'star-filled',
+    color: '#ffd09a',
+    title: '我的收藏',
+    subtitle: '被你留下的温柔片段',
+  },
+] as const
 
 function openSettings() {
   uni.navigateTo({ url: '/pages/settings/index' })
@@ -19,6 +37,18 @@ function openSettings() {
 
 function openMembership() {
   uni.navigateTo({ url: '/pages/membership/index' })
+}
+
+function openMenuItem(id: (typeof menu)[number]['id']) {
+  if (id === 'companions') {
+    uni.navigateTo({ url: `/pages/companion/index?id=${profileStore.profile.preferredCompanionId}` })
+    return
+  }
+  if (id === 'calendar') {
+    uni.reLaunch({ url: '/pages/review/index' })
+    return
+  }
+  uni.reLaunch({ url: '/pages/review/index' })
 }
 
 function navigate(destination: string) {
@@ -35,7 +65,12 @@ function navigate(destination: string) {
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="profile-scroll">
       <view class="hn-page user-page">
-        <view class="top-row"><text>我的</text><button data-testid="open-settings" @click="openSettings"><uni-icons type="gear-filled" :size="26" color="#e6e7f6" /></button></view>
+        <view class="top-row">
+          <text>我的</text>
+          <view data-testid="open-settings" class="settings-btn" role="button" aria-label="设置" @click="openSettings">
+            <uni-icons type="gear-filled" :size="26" color="#e6e7f6" />
+          </view>
+        </view>
         <view class="user-card">
           <image src="/static/heartnest/mika-profile.jpg" mode="aspectFill" />
           <view class="user-copy"><text>{{ profileStore.profile.displayName }}</text><text>连续陪伴 {{ profileStore.profile.streakDays }} 天</text></view>
@@ -56,7 +91,13 @@ function navigate(destination: string) {
 
         <view class="hn-section-title">我的心栖</view>
         <HnGlassCard class="menu-card">
-          <view v-for="item in menu" :key="item.title" class="menu-row">
+          <view
+            v-for="item in menu"
+            :key="item.id"
+            :data-testid="`menu-${item.id}`"
+            class="menu-row"
+            @click="openMenuItem(item.id)"
+          >
             <view class="menu-icon"><uni-icons :type="item.icon" :size="23" :color="item.color" /></view>
             <view><text>{{ item.title }}</text><text>{{ item.subtitle }}</text></view>
             <uni-icons type="right" :size="20" color="#8f99b9" />
@@ -76,7 +117,19 @@ function navigate(destination: string) {
 .user-page { padding-bottom: calc(210rpx + env(safe-area-inset-bottom)); }
 .top-row { display: flex; align-items: center; justify-content: space-between; margin: 12rpx 0 34rpx; }
 .top-row > text { font-family: Georgia, 'Songti SC', serif; font-size: 52rpx; font-weight: 700; }
-.top-row button { display: grid; place-items: center; width: 70rpx; height: 70rpx; padding: 0; border: 1rpx solid rgba(196, 205, 243, 0.18); border-radius: 50%; background: rgba(39, 49, 91, 0.58); }
+.settings-btn {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 70rpx;
+  height: 70rpx;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 1rpx solid rgba(196, 205, 243, 0.18);
+  border-radius: 50%;
+  background: rgba(39, 49, 91, 0.58);
+  cursor: pointer;
+}
 .user-card { display: grid; grid-template-columns: 112rpx 1fr auto; align-items: center; gap: 22rpx; margin-bottom: 28rpx; }
 .user-card image { width: 112rpx; height: 112rpx; border: 3rpx solid rgba(255, 213, 235, 0.56); border-radius: 36rpx; }
 .user-copy { display: flex; flex-direction: column; gap: 8rpx; }
@@ -93,7 +146,15 @@ function navigate(destination: string) {
 .stats-grid text:first-child { font-size: 32rpx; font-weight: 700; }
 .stats-grid text:last-child { color: #aeb7d3; font-size: 18rpx; }
 .menu-card { overflow: hidden; padding: 0 24rpx; }
-.menu-row { display: grid; grid-template-columns: 64rpx 1fr auto; align-items: center; gap: 16rpx; min-height: 116rpx; border-bottom: 1rpx solid rgba(185, 195, 239, 0.12); }
+.menu-row {
+  display: grid;
+  grid-template-columns: 64rpx 1fr auto;
+  align-items: center;
+  gap: 16rpx;
+  min-height: 116rpx;
+  border-bottom: 1rpx solid rgba(185, 195, 239, 0.12);
+  cursor: pointer;
+}
 .menu-row:last-child { border-bottom: 0; }
 .menu-icon { display: grid; place-items: center; width: 58rpx; height: 58rpx; border-radius: 19rpx; background: rgba(132, 129, 199, 0.16); }
 .menu-row > view:nth-child(2) { display: flex; flex-direction: column; gap: 6rpx; }

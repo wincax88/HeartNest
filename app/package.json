@@ -71,7 +71,6 @@
     "@dcloudio/uni-stacktracey": "3.0.0-5020420260813003",
     "@dcloudio/vite-plugin-uni": "3.0.0-5020420260813003",
     "@playwright/test": "^1.55.0",
-    "@rollup/rollup-win32-x64-msvc": "^4.63.4",
     "@vue/runtime-core": "^3.4.21",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.1.3",

@@ -16,7 +16,12 @@ const routeId = currentPage?.options?.id as CompanionId | undefined
 if (routeId && companionById[routeId]) appStore.selectCompanion(routeId)
 
 function goBack() {
-  uni.navigateBack()
+  const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+  if (pages.length > 1) {
+    uni.navigateBack()
+    return
+  }
+  uni.reLaunch({ url: '/pages/home/index' })
 }
 
 function startChat() {
@@ -28,10 +33,11 @@ function startChat() {
   <view class="hn-screen profile-screen">
     <image class="profile-backdrop" :src="companion.profileImage" mode="aspectFill" />
     <view class="profile-shade" />
+    <view class="profile-topbar">
+      <HnAppHeader back @back="goBack" />
+    </view>
     <scroll-view scroll-y class="profile-scroll">
       <view class="hn-page profile-page">
-        <HnAppHeader back @back="goBack" />
-
         <view class="profile-hero">
           <view class="profile-avatar-wrap">
             <image class="profile-avatar" :src="companion.profileImage" mode="aspectFill" />
@@ -69,10 +75,21 @@ function startChat() {
 
 <style scoped lang="scss">
 .profile-screen { background: #071126; }
-.profile-scroll { height: 100vh; }
-.profile-backdrop { position: fixed; inset: 0; width: 100%; height: 820rpx; opacity: 0.44; filter: blur(4rpx); transform: scale(1.03); }
-.profile-shade { position: fixed; inset: 0; background: linear-gradient(180deg, rgba(4, 10, 29, 0.18), #071126 50%, #050d20 100%); }
-.profile-page { padding-bottom: calc(80rpx + env(safe-area-inset-bottom)); }
+.profile-topbar {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: 786rpx;
+  margin: 0 auto;
+  padding: calc(var(--status-bar-height, 24px) + 24rpx) 36rpx 0;
+}
+.profile-scroll { position: relative; z-index: 2; height: calc(100vh - env(safe-area-inset-top, 0px)); }
+.profile-backdrop { position: fixed; inset: 0; z-index: 0; width: 100%; height: 820rpx; opacity: 0.44; filter: blur(4rpx); transform: scale(1.03); pointer-events: none; }
+.profile-shade { position: fixed; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(4, 10, 29, 0.18), #071126 50%, #050d20 100%); pointer-events: none; }
+.profile-page {
+  padding-top: 12rpx;
+  padding-bottom: calc(80rpx + env(safe-area-inset-bottom));
+}
 .profile-hero { display: flex; flex-direction: column; align-items: center; padding: 22rpx 0 42rpx; }
 .profile-avatar-wrap { position: relative; width: 264rpx; height: 264rpx; }
 .profile-avatar { width: 100%; height: 100%; border: 5rpx solid rgba(255, 232, 241, 0.7); border-radius: 50%; box-shadow: 0 22rpx 80rpx rgba(172, 110, 199, 0.38); }

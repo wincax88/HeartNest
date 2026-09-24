@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { AppPreferences } from '@/domain/models'
 import { defaultPreferences, defaultProfile, memberships } from '@/mocks/profile'
 
 export const useProfileStore = defineStore('profile', {
@@ -13,6 +14,12 @@ export const useProfileStore = defineStore('profile', {
     },
     setNotifications(enabled: boolean) {
       this.preferences.notificationsEnabled = enabled
+    },
+    setMemoryPrompts(enabled: boolean) {
+      this.preferences.memoryPromptsEnabled = enabled
+    },
+    setReplyStyle(style: AppPreferences['replyStyle']) {
+      this.preferences.replyStyle = style
     },
   },
 })

@@ -11,7 +11,12 @@ const benefits = [
 ]
 
 function goBack() {
-  uni.navigateBack()
+  const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+  if (pages.length > 1) {
+    uni.navigateBack()
+    return
+  }
+  uni.reLaunch({ url: '/pages/profile/index' })
 }
 </script>
 
@@ -57,9 +62,9 @@ function goBack() {
 
 <style scoped lang="scss">
 .member-screen { background: #080d25; }
-.member-scroll { height: 100vh; }
-.member-bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.45; }
-.member-shade { position: fixed; inset: 0; background: linear-gradient(180deg, rgba(14, 10, 43, 0.28), #100d2c 45%, #080d25 100%); }
+.member-scroll { position: relative; z-index: 2; height: 100vh; }
+.member-bg { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.45; pointer-events: none; }
+.member-shade { position: fixed; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(14, 10, 43, 0.28), #100d2c 45%, #080d25 100%); pointer-events: none; }
 .member-page { padding-bottom: 70rpx; }
 .member-hero { display: flex; flex-direction: column; align-items: center; padding: 34rpx 20rpx 48rpx; text-align: center; }
 .crown { display: grid; place-items: center; width: 104rpx; height: 104rpx; margin-bottom: 24rpx; border: 1rpx solid rgba(255, 226, 187, 0.44); border-radius: 36rpx; background: linear-gradient(145deg, rgba(231, 166, 194, 0.38), rgba(122, 91, 186, 0.42)); box-shadow: 0 0 54rpx rgba(235, 156, 200, 0.32); }

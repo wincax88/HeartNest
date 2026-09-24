@@ -10,10 +10,21 @@ import { useProfileStore } from '@/stores/profile'
 describe('review and profile flows', () => {
   const navigateTo = vi.fn()
 
+  const showActionSheet = vi.fn()
+  const showModal = vi.fn()
+
   beforeEach(() => {
     setActivePinia(createPinia())
     navigateTo.mockReset()
-    vi.stubGlobal('uni', { navigateTo, navigateBack: vi.fn(), reLaunch: vi.fn() })
+    showActionSheet.mockReset()
+    showModal.mockReset()
+    vi.stubGlobal('uni', {
+      navigateTo,
+      navigateBack: vi.fn(),
+      reLaunch: vi.fn(),
+      showActionSheet,
+      showModal,
+    })
   })
 
   it('renders the seven-day review and memories', () => {
@@ -31,6 +42,27 @@ describe('review and profile flows', () => {
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/membership/index' })
   })
 
+  it('opens profile menu destinations', async () => {
+    const reLaunch = vi.fn()
+    vi.stubGlobal('uni', {
+      navigateTo,
+      navigateBack: vi.fn(),
+      reLaunch,
+      showActionSheet: vi.fn(),
+      showModal: vi.fn(),
+    })
+    const wrapper = mount(ProfilePage, { global: { plugins: [createPinia()] } })
+
+    await wrapper.get('[data-testid="menu-companions"]').trigger('click')
+    expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/companion/index?id=mika' })
+
+    await wrapper.get('[data-testid="menu-calendar"]').trigger('click')
+    expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/review/index' })
+
+    await wrapper.get('[data-testid="menu-favorites"]').trigger('click')
+    expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/review/index' })
+  })
+
   it('updates local notification preferences', async () => {
     const pinia = createPinia()
     const wrapper = mount(SettingsPage, { global: { plugins: [pinia] } })
@@ -38,6 +70,24 @@ describe('review and profile flows', () => {
     expect(profileStore.preferences.notificationsEnabled).toBe(true)
     await wrapper.get('[data-testid="notification-toggle"]').trigger('click')
     expect(profileStore.preferences.notificationsEnabled).toBe(false)
+  })
+
+  it('toggles memory prompts and opens settings actions', async () => {
+    const pinia = createPinia()
+    const wrapper = mount(SettingsPage, { global: { plugins: [pinia] } })
+    const profileStore = useProfileStore(pinia)
+
+    await wrapper.get('[data-testid="memory-prompt-toggle"]').trigger('click')
+    expect(profileStore.preferences.memoryPromptsEnabled).toBe(false)
+
+    await wrapper.get('[data-testid="reply-style-row"]').trigger('click')
+    expect(showActionSheet).toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="local-data-row"]').trigger('click')
+    expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '本地数据说明' }))
+
+    await wrapper.get('[data-testid="help-feedback-row"]').trigger('click')
+    expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '帮助与反馈' }))
   })
 
   it('upgrades the local membership demo', async () => {
