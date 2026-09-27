@@ -1,19 +1,26 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
-import { companionById } from '@/mocks/companions'
+import { useBootstrapStore } from '@/stores/bootstrap'
 import { useProfileStore } from '@/stores/profile'
 
 const profileStore = useProfileStore()
-const companion = companionById[profileStore.profile.preferredCompanionId]
+const bootstrapStore = useBootstrapStore()
+const companion = computed(() => bootstrapStore.companionById[profileStore.profile.preferredCompanionId])
+onMounted(() => bootstrapStore.initialize(true).catch(showError))
 
-const menu = [
+function showError(error: unknown) {
+  uni.showToast({ title: error instanceof Error ? error.message : '数据加载失败', icon: 'none' })
+}
+
+const menu = computed(() => [
   {
     id: 'companions',
     icon: 'heart-filled',
     color: '#f2a7c9',
     title: '我的陪伴者',
-    subtitle: `最常聊天 · ${companion.name}`,
+    subtitle: `最常聊天 · ${companion.value?.name ?? '暂无'}`,
   },
   {
     id: 'calendar',
@@ -29,7 +36,7 @@ const menu = [
     title: '我的收藏',
     subtitle: '被你留下的温柔片段',
   },
-] as const
+] as const)
 
 function openSettings() {
   uni.navigateTo({ url: '/pages/settings/index' })
@@ -39,7 +46,7 @@ function openMembership() {
   uni.navigateTo({ url: '/pages/membership/index' })
 }
 
-function openMenuItem(id: (typeof menu)[number]['id']) {
+function openMenuItem(id: 'companions' | 'calendar' | 'favorites') {
   if (id === 'companions') {
     uni.navigateTo({ url: `/pages/companion/index?id=${profileStore.profile.preferredCompanionId}` })
     return
@@ -72,7 +79,7 @@ function navigate(destination: string) {
           </view>
         </view>
         <view class="user-card">
-          <image src="/static/heartnest/mika-profile.jpg" mode="aspectFill" />
+          <image :src="profileStore.profile.avatar || '/static/heartnest/mika-profile.jpg'" mode="aspectFill" />
           <view class="user-copy"><text>{{ profileStore.profile.displayName }}</text><text>连续陪伴 {{ profileStore.profile.streakDays }} 天</text></view>
           <view class="streak"><uni-icons type="fire-filled" :size="19" color="#ffd1a3" /><text>{{ profileStore.profile.streakDays }}</text></view>
         </view>
@@ -84,9 +91,9 @@ function navigate(destination: string) {
         </HnGlassCard>
 
         <view class="stats-grid">
-          <HnGlassCard><text>18</text><text>累计对话</text></HnGlassCard>
-          <HnGlassCard><text>12</text><text>被记住的片段</text></HnGlassCard>
-          <HnGlassCard><text>7</text><text>陪伴天数</text></HnGlassCard>
+          <HnGlassCard><text>{{ profileStore.stats.conversations }}</text><text>累计对话</text></HnGlassCard>
+          <HnGlassCard><text>{{ profileStore.stats.memories }}</text><text>被记住的片段</text></HnGlassCard>
+          <HnGlassCard><text>{{ profileStore.stats.activeDays }}</text><text>陪伴天数</text></HnGlassCard>
         </view>
 
         <view class="hn-section-title">我的心栖</view>

@@ -1,19 +1,29 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
 import type { CompanionId } from '@/domain/models'
-import { companionById } from '@/mocks/companions'
 import { useAppStore } from '@/stores/app'
+import { useBootstrapStore } from '@/stores/bootstrap'
 
 const appStore = useAppStore()
-const companion = computed(() => companionById[appStore.selectedCompanionId])
+const bootstrapStore = useBootstrapStore()
+const companion = computed(() => bootstrapStore.companionById[appStore.selectedCompanionId])
+const stats = computed(() => bootstrapStore.companionStats[appStore.selectedCompanionId])
 
 const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
 const currentPage = currentPages[currentPages.length - 1] as { options?: Record<string, string> } | undefined
 const routeId = currentPage?.options?.id as CompanionId | undefined
-if (routeId && companionById[routeId]) appStore.selectCompanion(routeId)
+if (routeId) appStore.selectedCompanionId = routeId
+onMounted(async () => {
+  await bootstrapStore.initialize().catch(showError)
+  if (!bootstrapStore.companionById[appStore.selectedCompanionId]) appStore.selectedCompanionId = 'mika'
+})
+
+function showError(error: unknown) {
+  uni.showToast({ title: error instanceof Error ? error.message : '数据加载失败', icon: 'none' })
+}
 
 function goBack() {
   const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
@@ -25,12 +35,12 @@ function goBack() {
 }
 
 function startChat() {
-  uni.navigateTo({ url: `/pages/chat/index?id=${companion.value.id}` })
+  if (companion.value) uni.navigateTo({ url: `/pages/chat/index?id=${companion.value.id}` })
 }
 </script>
 
 <template>
-  <view class="hn-screen profile-screen">
+  <view v-if="companion" class="hn-screen profile-screen">
     <image class="profile-backdrop" :src="companion.profileImage" mode="aspectFill" />
     <view class="profile-shade" />
     <view class="profile-topbar">
@@ -56,9 +66,9 @@ function startChat() {
         </HnGlassCard>
 
         <view class="connection-grid">
-          <HnGlassCard><text class="connection-value">12</text><text class="connection-label">次对话</text></HnGlassCard>
-          <HnGlassCard><text class="connection-value">4.9</text><text class="connection-label">安心评分</text></HnGlassCard>
-          <HnGlassCard><text class="connection-value">夜间</text><text class="connection-label">常在时段</text></HnGlassCard>
+          <HnGlassCard><text class="connection-value">{{ stats?.conversations ?? 0 }}</text><text class="connection-label">次对话</text></HnGlassCard>
+          <HnGlassCard><text class="connection-value">--</text><text class="connection-label">安心评分</text></HnGlassCard>
+          <HnGlassCard><text class="connection-value">{{ companion.preferredHours.includes('22:00') ? '夜间' : '全天' }}</text><text class="connection-label">常在时段</text></HnGlassCard>
         </view>
 
         <view class="quote-card">

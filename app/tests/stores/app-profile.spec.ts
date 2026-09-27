@@ -7,25 +7,25 @@ import { useReviewStore } from '@/stores/review'
 describe('experience stores', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('records the selected mood and onboarding completion', () => {
+  it('records the selected mood and onboarding completion through the API', async () => {
     const store = useAppStore()
-    store.selectMood('anxious')
-    store.completeOnboarding()
+    await store.selectMood('anxious')
+    await store.completeOnboarding()
     expect(store.selectedMoodId).toBe('anxious')
     expect(store.onboardingCompleted).toBe(true)
   })
 
-  it('upgrades membership locally and keeps preferences editable', () => {
+  it('activates a persisted trial and keeps preferences editable', async () => {
     const store = useProfileStore()
-    store.upgradeLocally()
-    store.setNotifications(false)
+    await store.activateTrial()
+    await store.setNotifications(false)
     expect(store.membership.tier).toBe('pro')
     expect(store.preferences.notificationsEnabled).toBe(false)
   })
 
-  it('adds a local mood record to the review timeline', () => {
+  it('hydrates the review timeline from server data', () => {
     const store = useReviewStore()
-    store.addMoodRecord('calm', '今晚终于放松了一点')
-    expect(store.localRecords.at(-1)?.summary).toBe('今晚终于放松了一点')
+    store.hydrate([{ date: '09/27', weekday: '周日', score: 4, moodId: 'calm', label: '平静', summary: '今晚终于放松了一点', keywords: [], recorded: true }], [])
+    expect(store.reviewDays.at(-1)?.summary).toBe('今晚终于放松了一点')
   })
 })

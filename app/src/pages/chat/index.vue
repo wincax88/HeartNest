@@ -1,34 +1,54 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import ChatBubble from '@/components/ChatBubble.vue'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import MemoryPrompt from '@/components/MemoryPrompt.vue'
 import type { CompanionId } from '@/domain/models'
-import { companionById } from '@/mocks/companions'
+import type { ChatMessage } from '@/domain/models'
+import { useAppStore } from '@/stores/app'
+import { useBootstrapStore } from '@/stores/bootstrap'
 import { useChatStore } from '@/stores/chat'
 
 const chatStore = useChatStore()
+const appStore = useAppStore()
+const bootstrapStore = useBootstrapStore()
 const draft = ref('')
-const companion = computed(() => companionById[chatStore.companionId])
+const memorySaved = ref(false)
+const companion = computed(() => bootstrapStore.companionById[chatStore.companionId])
 
 const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
 const currentPage = currentPages[currentPages.length - 1] as { options?: Record<string, string> } | undefined
 const routeId = currentPage?.options?.id as CompanionId | undefined
-if (routeId && companionById[routeId]) chatStore.companionId = routeId
+if (routeId) chatStore.companionId = routeId
 
-if (chatStore.messages.length === 0) {
-  chatStore.messages.push({
-    id: 'welcome-mika', sender: 'companion', content: '我在这里。',
-    createdAt: new Date().toISOString(), status: 'sent',
-  })
+onMounted(async () => {
+  try {
+    await bootstrapStore.initialize()
+    if (!bootstrapStore.companionById[chatStore.companionId]) chatStore.companionId = 'mika'
+    chatStore.moodId = appStore.selectedMoodId
+    await chatStore.load(chatStore.companionId)
+  } catch (error) { showError(error) }
+})
+
+function showError(error: unknown) {
+  uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
 }
 
 async function send() {
   const content = draft.value.trim()
   if (!content || chatStore.isReplying) return
   draft.value = ''
-  await chatStore.send(content)
+  try { await chatStore.send(content) } catch (error) { showError(error) }
   await nextTick()
+}
+
+function retry(message: ChatMessage) {
+  chatStore.retry(message).catch(showError)
+}
+
+async function saveMemory() {
+  try { await chatStore.saveLatestMemory(); memorySaved.value = true; uni.showToast({ title: '已记住', icon: 'success' }) }
+  catch (error) { showError(error) }
 }
 
 function goBack() {
@@ -42,7 +62,7 @@ function goBack() {
 </script>
 
 <template>
-  <view class="hn-screen chat-screen">
+  <view v-if="companion" class="hn-screen chat-screen">
     <image class="hn-night-bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" />
     <view class="chat-shade" />
     <view class="chat-page">
@@ -57,12 +77,12 @@ function goBack() {
           <text>{{ companion.name }} 会温柔地听你说，也会尊重你不想继续的话题。</text>
         </view>
 
-        <ChatBubble v-for="message in chatStore.messages" :key="message.id" :message="message" />
+        <ChatBubble v-for="message in chatStore.messages" :key="message.id" :message="message" @retry="retry(message)" />
         <view v-if="chatStore.isReplying" class="typing-row">
           <view class="typing-dot" /><view class="typing-dot" /><view class="typing-dot" />
           <text>正在回应</text>
         </view>
-        <MemoryPrompt :visible="chatStore.messages.length > 2" />
+        <MemoryPrompt :visible="chatStore.messages.length > 1" :saved="memorySaved" @save="saveMemory" />
       </scroll-view>
 
       <view class="composer-wrap">
@@ -87,7 +107,7 @@ function goBack() {
             <uni-icons type="paperplane-filled" :size="24" color="#ffffff" />
           </button>
         </view>
-        <text class="privacy-note">你的对话只用于本地模拟体验</text>
+        <text class="privacy-note">对话会安全同步到 HeartNest 服务</text>
       </view>
     </view>
   </view>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-defineProps<{ visible?: boolean }>()
+defineProps<{ visible?: boolean; saved?: boolean }>()
+defineEmits<{ save: [] }>()
 </script>
 
 <template>
@@ -9,7 +10,7 @@ defineProps<{ visible?: boolean }>()
       <text class="memory-prompt__title">要帮你记住这一刻吗？</text>
       <text class="memory-prompt__text">之后复盘时，你可以再回来看看此刻的心情。</text>
     </view>
-    <text class="memory-prompt__action">记住</text>
+    <text class="memory-prompt__action" @click="$emit('save')">{{ saved ? '已记住' : '记住' }}</text>
   </view>
 </template>
 

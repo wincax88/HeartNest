@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HomePage from '@/pages/home/index.vue'
@@ -11,23 +11,27 @@ describe('home page', () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     navigateTo.mockReset()
-    vi.stubGlobal('uni', { navigateTo, redirectTo: vi.fn(), switchTab: vi.fn() })
+    vi.stubGlobal('uni', { navigateTo, redirectTo: vi.fn(), switchTab: vi.fn(), showToast: vi.fn() })
   })
 
   it('stores the selected mood', async () => {
     const wrapper = mount(HomePage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
     await wrapper.get('[data-testid="mood-tired"]').trigger('click')
     expect(useAppStore().selectedMoodId).toBe('tired')
   })
 
   it('opens Mika profile from the companion card', async () => {
     const wrapper = mount(HomePage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
     await wrapper.get('[data-testid="companion-mika"]').trigger('click')
+    await flushPromises()
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/companion/index?id=mika' })
   })
 
   it('starts chat with the current companion', async () => {
     const wrapper = mount(HomePage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
     await wrapper.get('[data-testid="start-chat"]').trigger('click')
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/chat/index?id=mika' })
   })

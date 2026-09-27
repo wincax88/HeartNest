@@ -41,6 +41,7 @@ export interface ChatMessage {
   createdAt: string
   status: MessageStatus
   memoryId?: string
+  replyTo?: string
 }
 
 export interface ChatThread {
@@ -68,6 +69,7 @@ export interface ReviewDay {
   label: string
   summary: string
   keywords: string[]
+  recorded?: boolean
 }
 
 export interface UserProfile {
@@ -81,6 +83,7 @@ export interface Membership {
   tier: 'free' | 'pro'
   title: string
   benefits: string[]
+  trialEndsAt?: string
 }
 
 export interface AppPreferences {
@@ -88,4 +91,27 @@ export interface AppPreferences {
   replyStyle: 'gentle' | 'concise' | 'reflective'
   memoryPromptsEnabled: boolean
   onboardingCompleted: boolean
+}
+
+export interface UserStats {
+  conversations: number
+  memories: number
+  activeDays: number
+}
+
+export interface BootstrapData {
+  companions: Companion[]
+  moods: MoodOption[]
+  profile: UserProfile
+  membership: Membership
+  preferences: AppPreferences
+  state: {
+    selectedMoodId: MoodId
+    selectedCompanionId: CompanionId
+    onboardingCompleted: boolean
+  }
+  reviewDays: ReviewDay[]
+  memories: MemoryItem[]
+  stats: UserStats
+  companionStats: Record<CompanionId, { conversations: number }>
 }

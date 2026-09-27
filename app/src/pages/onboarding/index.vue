@@ -11,8 +11,9 @@ const slides = [
   { title: '记住重要的片段', copy: '所有记忆都由你掌控，让每一次陪伴更有温度。' },
 ]
 
-function enter() {
-  appStore.completeOnboarding()
+async function enter() {
+  try { await appStore.completeOnboarding() }
+  catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '无法保存状态', icon: 'none' }); return }
   uni.reLaunch({ url: '/pages/home/index' })
 }
 </script>

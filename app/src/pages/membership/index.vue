@@ -2,8 +2,20 @@
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
 import { useProfileStore } from '@/stores/profile'
+import { useBootstrapStore } from '@/stores/bootstrap'
+import { onMounted } from 'vue'
 
 const profileStore = useProfileStore()
+const bootstrapStore = useBootstrapStore()
+onMounted(() => bootstrapStore.initialize().catch(showError))
+
+function showError(error: unknown) {
+  uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
+}
+
+function activateTrial() {
+  profileStore.activateTrial().catch(showError)
+}
 const benefits = [
   { icon: 'chatboxes-filled', title: '无限对话', copy: '不打断每一次想说话的时刻' },
   { icon: 'heart-filled', title: '长期记忆', copy: '让重要的片段被更久地记住' },
@@ -42,19 +54,19 @@ function goBack() {
         </view>
 
         <view class="price-card" :class="{ 'is-active': profileStore.membership.tier === 'pro' }">
-          <view><text>{{ profileStore.membership.tier === 'pro' ? '心栖会员已开启' : '连续包月' }}</text><text>{{ profileStore.membership.tier === 'pro' ? '谢谢你选择更长久的陪伴' : '可随时取消 · 当前为演示体验' }}</text></view>
-          <view v-if="profileStore.membership.tier !== 'pro'" class="price"><text>¥</text><text>18</text><text>/月</text></view>
+          <view><text>{{ profileStore.membership.tier === 'pro' ? '心栖试用会员已开启' : '7 天免费试用' }}</text><text>{{ profileStore.membership.tier === 'pro' ? '试用权益已保存到你的设备记录' : '无需付款，不会自动续费' }}</text></view>
+          <view v-if="profileStore.membership.tier !== 'pro'" class="price"><text>¥</text><text>0</text><text>/7天</text></view>
           <uni-icons v-else type="checkbox-filled" :size="34" color="#74e3ae" />
         </view>
 
         <HnPrimaryButton
           data-testid="upgrade-membership"
-          :label="profileStore.membership.tier === 'pro' ? '已解锁心栖会员' : '立即开启体验'"
+          :label="profileStore.membership.tier === 'pro' ? '已解锁心栖试用' : '开启 7 天免费试用'"
           :disabled="profileStore.membership.tier === 'pro'"
           icon="vip-filled"
-          @click="profileStore.upgradeLocally()"
+          @click="activateTrial"
         />
-        <text class="member-note">模拟体验不会产生真实扣费</text>
+        <text class="member-note">试用不会产生扣费，也不会自动转为付费会员</text>
       </view>
     </scroll-view>
   </view>

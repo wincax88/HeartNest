@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import type { AppPreferences } from '@/domain/models'
 import { useProfileStore } from '@/stores/profile'
+import { useBootstrapStore } from '@/stores/bootstrap'
+import { api } from '@/services/api'
 
 const profileStore = useProfileStore()
+const bootstrapStore = useBootstrapStore()
+onMounted(() => bootstrapStore.initialize().catch(showError))
+
+function showError(error: unknown) {
+  uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
+}
 
 const replyStyles: Array<{ id: AppPreferences['replyStyle']; label: string }> = [
   { id: 'gentle', label: '温柔接纳' },
@@ -18,11 +26,11 @@ const replyStyleLabel = computed(
 )
 
 function toggleNotifications() {
-  profileStore.setNotifications(!profileStore.preferences.notificationsEnabled)
+  profileStore.setNotifications(!profileStore.preferences.notificationsEnabled).catch(showError)
 }
 
 function toggleMemoryPrompts() {
-  profileStore.setMemoryPrompts(!profileStore.preferences.memoryPromptsEnabled)
+  profileStore.setMemoryPrompts(!profileStore.preferences.memoryPromptsEnabled).catch(showError)
 }
 
 function openReplyStylePicker() {
@@ -30,15 +38,15 @@ function openReplyStylePicker() {
     itemList: replyStyles.map((item) => item.label),
     success: ({ tapIndex }) => {
       const selected = replyStyles[tapIndex]
-      if (selected) profileStore.setReplyStyle(selected.id)
+      if (selected) profileStore.setReplyStyle(selected.id).catch(showError)
     },
   })
 }
 
 function openLocalDataInfo() {
   uni.showModal({
-    title: '本地数据说明',
-    content: '当前 Demo 使用模拟数据，对话与偏好只保存在本机，不会上传真实内容。',
+    title: '数据说明',
+    content: '你的情绪、对话、记忆和偏好会与当前设备的匿名标识关联，并保存到 HeartNest 服务端。最近的对话会发送至 DeepSeek 生成陪伴回复。',
     showCancel: false,
     confirmText: '知道了',
   })
@@ -47,9 +55,14 @@ function openLocalDataInfo() {
 function openHelpFeedback() {
   uni.showModal({
     title: '帮助与反馈',
-    content: '如果你愿意，可以告诉我们哪里还可以更温柔。当前 Demo 仅做本地提示，不会真正提交。',
-    showCancel: false,
-    confirmText: '好的',
+    content: '',
+    editable: true,
+    placeholderText: '请告诉我们哪里还可以更好',
+    confirmText: '提交',
+    success: ({ confirm, content }) => {
+      if (!confirm || !content?.trim()) return
+      api.submitFeedback(content).then(() => uni.showToast({ title: '感谢你的反馈', icon: 'success' })).catch(showError)
+    },
   })
 }
 
@@ -66,7 +79,7 @@ function goBack() {
 <template>
   <view class="hn-screen settings-screen">
     <view class="hn-page settings-page">
-      <HnAppHeader back title="设置" subtitle="这些偏好只保存在你的设备上" @back="goBack" />
+      <HnAppHeader back title="设置" subtitle="这些偏好会安全同步" @back="goBack" />
       <view class="settings-group">
         <text class="group-title">陪伴偏好</text>
         <HnGlassCard class="settings-card">
@@ -98,7 +111,7 @@ function goBack() {
         <text class="group-title">隐私与支持</text>
         <HnGlassCard class="settings-card">
           <view data-testid="local-data-row" class="setting-row is-action" @click="openLocalDataInfo">
-            <view><text>本地数据说明</text><text>当前版本使用模拟数据，不上传真实对话</text></view>
+            <view><text>数据与隐私说明</text><text>了解对话与偏好如何保存</text></view>
             <uni-icons type="right" :size="20" color="#9ba6c8" />
           </view>
           <view data-testid="help-feedback-row" class="setting-row is-action" @click="openHelpFeedback">
@@ -107,7 +120,7 @@ function goBack() {
           </view>
         </HnGlassCard>
       </view>
-      <text class="version">HeartNest 心栖 · Demo 1.0</text>
+      <text class="version">HeartNest 心栖 · 1.0</text>
     </view>
   </view>
 </template>

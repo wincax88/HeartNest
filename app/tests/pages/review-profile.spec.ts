@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReviewPage from '@/pages/review/index.vue'
@@ -24,18 +24,21 @@ describe('review and profile flows', () => {
       reLaunch: vi.fn(),
       showActionSheet,
       showModal,
+      showToast: vi.fn(),
     })
   })
 
-  it('renders the seven-day review and memories', () => {
+  it('renders the seven-day review and memories', async () => {
     const wrapper = mount(ReviewPage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
     expect(wrapper.findAll('[data-testid="review-day"]')).toHaveLength(7)
     expect(wrapper.findAll('[data-testid="memory-item"]')).toHaveLength(3)
-    expect(wrapper.text()).toContain('这一周，你在慢慢恢复')
+    expect(wrapper.text()).toContain('这是你近七天的真实记录')
   })
 
   it('opens settings and membership from profile', async () => {
     const wrapper = mount(ProfilePage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
     await wrapper.get('[data-testid="open-settings"]').trigger('click')
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/settings/index' })
     await wrapper.get('[data-testid="open-membership"]').trigger('click')
@@ -50,8 +53,10 @@ describe('review and profile flows', () => {
       reLaunch,
       showActionSheet: vi.fn(),
       showModal: vi.fn(),
+      showToast: vi.fn(),
     })
     const wrapper = mount(ProfilePage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
 
     await wrapper.get('[data-testid="menu-companions"]').trigger('click')
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/companion/index?id=mika' })
@@ -84,18 +89,19 @@ describe('review and profile flows', () => {
     expect(showActionSheet).toHaveBeenCalled()
 
     await wrapper.get('[data-testid="local-data-row"]').trigger('click')
-    expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '本地数据说明' }))
+    expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '数据说明' }))
 
     await wrapper.get('[data-testid="help-feedback-row"]').trigger('click')
     expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '帮助与反馈' }))
   })
 
-  it('upgrades the local membership demo', async () => {
+  it('activates the server-backed membership trial', async () => {
     const pinia = createPinia()
     const wrapper = mount(MembershipPage, { global: { plugins: [pinia] } })
     const profileStore = useProfileStore(pinia)
     await wrapper.get('[data-testid="upgrade-membership"]').trigger('click')
+    await flushPromises()
     expect(profileStore.membership.tier).toBe('pro')
-    expect(wrapper.text()).toContain('已解锁心栖会员')
+    expect(wrapper.text()).toContain('已解锁心栖试用')
   })
 })

@@ -5,7 +5,6 @@ import { useChatStore } from '@/stores/chat'
 describe('chat store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    vi.useFakeTimers()
   })
 
   it('adds one user message and one deterministic reply', async () => {
@@ -15,7 +14,6 @@ describe('chat store', () => {
     expect(store.messages.at(-1)?.sender).toBe('user')
     expect(store.isReplying).toBe(true)
 
-    await vi.runAllTimersAsync()
     await sending
 
     expect(store.messages.map((message) => message.sender)).toEqual(['user', 'companion'])

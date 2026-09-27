@@ -1,20 +1,33 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import CompanionCard from '@/components/CompanionCard.vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
 import MoodSelector from '@/components/MoodSelector.vue'
 import type { CompanionId, MoodId } from '@/domain/models'
-import { companions } from '@/mocks/companions'
-import { moods } from '@/mocks/moods'
 import { useAppStore } from '@/stores/app'
+import { useBootstrapStore } from '@/stores/bootstrap'
+import { useProfileStore } from '@/stores/profile'
 
 const appStore = useAppStore()
-const selectedMood = computed({ get: () => appStore.selectedMoodId, set: (value: MoodId) => appStore.selectMood(value) })
+const bootstrapStore = useBootstrapStore()
+const profileStore = useProfileStore()
+const companions = computed(() => bootstrapStore.companions)
+const moods = computed(() => bootstrapStore.moods)
+const selectedMood = computed({
+  get: () => appStore.selectedMoodId,
+  set: (value: MoodId) => { appStore.selectMood(value).catch(showError) },
+})
 
-function openCompanion(id: CompanionId) {
-  appStore.selectCompanion(id)
+onMounted(() => bootstrapStore.initialize().catch(showError))
+
+function showError(error: unknown) {
+  uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
+}
+
+async function openCompanion(id: CompanionId) {
+  try { await appStore.selectCompanion(id) } catch (error) { showError(error); return }
   uni.navigateTo({ url: `/pages/companion/index?id=${id}` })
 }
 
@@ -41,7 +54,10 @@ function navigate(destination: string) {
           <view><text class="brand-name">心栖</text><text class="brand-en">HeartNest</text></view>
         </view>
 
-        <view class="greeting"><text>晚上好，Michael</text><text>让情绪有处安放</text></view>
+        <view class="greeting"><text>晚上好，{{ profileStore.profile.displayName }}</text><text>让情绪有处安放</text></view>
+
+        <view v-if="bootstrapStore.loading" class="data-state">正在同步你的数据…</view>
+        <view v-else-if="bootstrapStore.error" class="data-state data-state--error" @click="bootstrapStore.initialize(true)">{{ bootstrapStore.error }}，点击重试</view>
 
         <HnGlassCard class="mood-panel">
           <view class="panel-title"><uni-icons type="heart-filled" :size="24" color="#ffacc8" /><text>今天，你的心情是？</text></view>
@@ -71,6 +87,8 @@ function navigate(destination: string) {
 <style scoped lang="scss">
 .home-scroll { height: 100vh; }
 .home-page { padding-bottom: calc(260rpx + env(safe-area-inset-bottom)); }
+.data-state { margin: -28rpx 0 28rpx; color: #aeb7d3; font-size: 21rpx; }
+.data-state--error { color: #ffc1cf; cursor: pointer; }
 .brand-row { display: flex; align-items: center; gap: 18rpx; }
 .brand-mark { display: grid; place-items: center; width: 66rpx; height: 66rpx; border: 3rpx solid #d6a9ff; border-radius: 22rpx; box-shadow: 0 0 22rpx rgba(238, 164, 255, 0.45); }
 .brand-row > view:last-child { display: flex; flex-direction: column; }

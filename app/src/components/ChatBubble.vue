@@ -2,6 +2,7 @@
 import type { ChatMessage } from '@/domain/models'
 
 defineProps<{ message: ChatMessage }>()
+defineEmits<{ retry: [] }>()
 </script>
 
 <template>
@@ -12,6 +13,8 @@ defineProps<{ message: ChatMessage }>()
   >
     <view class="chat-bubble" :class="`chat-bubble--${message.sender}`">
       <text>{{ message.content }}</text>
+      <text v-if="message.status === 'sending'" class="message-status">发送中…</text>
+      <text v-else-if="message.status === 'failed'" class="message-status message-status--failed" @click="$emit('retry')">发送失败，点击重试</text>
     </view>
   </view>
 </template>
@@ -35,4 +38,6 @@ defineProps<{ message: ChatMessage }>()
   border-radius: 30rpx 30rpx 8rpx 30rpx;
   background: linear-gradient(135deg, rgba(129, 119, 255, 0.92), rgba(219, 126, 192, 0.9));
 }
+.message-status { display: block; margin-top: 6rpx; color: rgba(255, 255, 255, 0.72); font-size: 18rpx; }
+.message-status--failed { color: #ffd0d8; cursor: pointer; }
 </style>

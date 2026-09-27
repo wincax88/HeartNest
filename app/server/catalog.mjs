@@ -1,9 +1,7 @@
-import type { Companion } from '@/domain/models'
-
-export const companions: Companion[] = [
+export const companions = [
   {
     id: 'mika', name: 'Mika', chineseName: '弥卡', role: 'Warm Presence / Emotional Anchor',
-    tagline: '今晚，我在这里', description: '更适合夜晚、情绪低落或只是想有人说说话的时候。她会温柔回应，也会慢慢记住你的状态。',
+    tagline: '今晚，我在这里', description: '更适合夜晚、情绪低落或只是想有人说说话的时候。她会温柔回应，也会在你同意时记住重要的状态。',
     traits: ['温柔治愈', '情绪接纳', '夜间陪伴'], avatar: '/static/heartnest/mika-profile.jpg',
     cardImage: '/static/heartnest/mika-profile.jpg', profileImage: '/static/heartnest/mika-profile.jpg',
     accent: 'rose', quote: '今晚，我在这里。', preferredHours: '22:00 – 02:00',
@@ -24,4 +22,12 @@ export const companions: Companion[] = [
   },
 ]
 
-export const companionById = Object.fromEntries(companions.map((item) => [item.id, item])) as Record<Companion['id'], Companion>
+export const moods = [
+  { id: 'calm', title: '平静', icon: 'circle', score: 4 },
+  { id: 'tired', title: '有点累', icon: 'moon', score: 2 },
+  { id: 'anxious', title: '有点焦虑', icon: 'help', score: 1 },
+  { id: 'talk', title: '只是想有人说说话', icon: 'chatbubble', score: 3 },
+]
+
+export const companionIds = new Set(companions.map((item) => item.id))
+export const moodIds = new Set(moods.map((item) => item.id))

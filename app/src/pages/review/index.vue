@@ -1,10 +1,19 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import { useReviewStore } from '@/stores/review'
+import { useBootstrapStore } from '@/stores/bootstrap'
 
 const reviewStore = useReviewStore()
-const heights = [32, 22, 46, 36, 62, 76, 92]
+const bootstrapStore = useBootstrapStore()
+const hasRecords = computed(() => reviewStore.reviewDays.some((day) => day.recorded))
+const heights = computed(() => reviewStore.reviewDays.map((day) => day.score ? 14 + day.score * 16 : 4))
+const dateRange = computed(() => {
+  const days = reviewStore.reviewDays
+  return days.length ? `${days[0].date} — ${days.at(-1)?.date}` : '--'
+})
+onMounted(() => bootstrapStore.initialize(true).catch((error) => uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })))
 
 function navigate(destination: string) {
   const routes: Record<string, string> = {
@@ -22,18 +31,18 @@ function navigate(destination: string) {
       <view class="hn-page review-page">
         <view class="review-header">
           <view><text class="eyebrow">WEEKLY REVIEW</text><text class="title">情绪回顾</text></view>
-          <view class="calendar-chip"><uni-icons type="calendar" :size="20" color="#e5d4ff" /><text>11.10 — 11.16</text></view>
+          <view class="calendar-chip"><uni-icons type="calendar" :size="20" color="#e5d4ff" /><text>{{ dateRange }}</text></view>
         </view>
 
         <HnGlassCard class="trend-card">
-          <view class="trend-copy"><text>这一周，你在慢慢恢复</text><text>情绪低点之后，平静的时刻正在变多。</text></view>
+          <view class="trend-copy"><text>{{ hasRecords ? '这是你近七天的真实记录' : '这一周还没有记录' }}</text><text>{{ hasRecords ? '每一次选择的情绪都会在这里留下轨迹。' : '去首页选择此刻的感受，从今天开始。' }}</text></view>
           <view class="chart">
             <view v-for="(day, index) in reviewStore.reviewDays" :key="day.date" data-testid="review-day" class="chart-day">
-              <view class="chart-track"><view class="chart-bar" :style="{ height: `${heights[index]}%` }"><view class="chart-dot" /></view></view>
+              <view class="chart-track"><view class="chart-bar" :class="{ 'chart-bar--empty': !day.recorded }" :style="{ height: `${heights[index]}%` }"><view class="chart-dot" /></view></view>
               <text class="chart-weekday">{{ day.weekday.slice(1) }}</text>
             </view>
           </view>
-          <view class="trend-footer"><uni-icons type="heart-filled" :size="18" color="#ffb6d7" /><text>比上周多了 3 个轻松时刻</text></view>
+          <view class="trend-footer"><uni-icons type="heart-filled" :size="18" color="#ffb6d7" /><text>{{ hasRecords ? '数据来自你的每日情绪选择' : '暂无可比较的记录' }}</text></view>
         </HnGlassCard>
 
         <view class="hn-section-title">被记住的片段</view>
@@ -45,11 +54,8 @@ function navigate(destination: string) {
           </HnGlassCard>
         </view>
 
-        <HnGlassCard class="insight-card">
-          <text class="insight-kicker">心栖发现</text>
-          <text class="insight-title">夜晚，是你更需要被陪伴的时候</text>
-          <text class="insight-copy">本周 68% 的对话发生在 22:00 之后。留一点缓冲给睡前的自己，也许会更舒服。</text>
-        </HnGlassCard>
+        <HnGlassCard v-if="reviewStore.memories.length === 0" class="empty-card">你主动记住的对话片段会出现在这里。</HnGlassCard>
+
       </view>
     </scroll-view>
     <HnBottomNav active="review" @navigate="navigate" />
@@ -72,6 +78,9 @@ function navigate(destination: string) {
 .chart-day { display: grid; grid-template-rows: 1fr auto; gap: 12rpx; align-items: end; text-align: center; }
 .chart-track { display: flex; align-items: flex-end; justify-content: center; height: 100%; border-bottom: 1rpx solid rgba(192, 201, 242, 0.13); }
 .chart-bar { position: relative; width: 22rpx; min-height: 20rpx; border-radius: 16rpx; background: linear-gradient(180deg, #f0a7d2, #786dff); box-shadow: 0 0 22rpx rgba(172, 118, 226, 0.35); }
+.chart-bar--empty { background: rgba(140, 150, 185, 0.25); box-shadow: none; }
+.chart-bar--empty .chart-dot { display: none; }
+.empty-card { padding: 30rpx; color: #aeb7d2; font-size: 21rpx; line-height: 1.6; text-align: center; }
 .chart-dot { position: absolute; top: -5rpx; left: 50%; width: 11rpx; height: 11rpx; border-radius: 50%; background: #fff0fa; transform: translateX(-50%); }
 .chart-weekday { color: #a5aecb; font-size: 18rpx; }
 .trend-footer { display: flex; align-items: center; justify-content: center; gap: 10rpx; padding-top: 20rpx; border-top: 1rpx solid rgba(192, 201, 242, 0.12); color: #d7cae6; font-size: 21rpx; }
