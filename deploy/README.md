@@ -1,33 +1,25 @@
 # HeartNest on Sealos
 
-HeartNest H5 使用命名空间 `ns-i61rahoe` 内的 nginx、Service、Ingress 与 1Gi PVC。静态文件通过临时 uploader Pod 写入 PVC，因此首次发布不依赖容器镜像仓库；`Dockerfile` 仍可用于后续镜像化发布。
+GitHub Actions 在 `main` 分支的应用或部署文件变更后自动部署，也可从 Actions 页面手动运行。它会测试并构建 H5、安装 API 生产依赖，将提交 SHA 对应的完整版本上传到已有的 1Gi PVC，再把同一个 Service/Ingress 切换至 Node API。用户数据单独保存在 PVC 的 `/data/heartnest.json`，不会被发布过程覆盖。
 
-## 发布
+## 首次设置
 
-```powershell
-pwsh deploy/verify.ps1 -StaticOnly
-pwsh deploy/publish.ps1 -Kubeconfig 'C:\Users\Admin\Documents\HeartNest\kubeconfig (1).yaml'
-pwsh deploy/verify.ps1 -Kubeconfig 'C:\Users\Admin\Documents\HeartNest\kubeconfig (1).yaml'
-```
+在 GitHub 仓库的 **Settings → Secrets and variables → Actions → New repository secret** 中配置：
 
-已验证访问地址：`https://heartnest-ns-i61rahoe.gzg.sealos.run/`。HTTP 与 HTTPS 均返回应用首页，HTTPS 使用 Sealos 的平台入口证书。
+| Secret | 内容 |
+| --- | --- |
+| `HEARTNEST_KUBECONFIG` | `kubeconfig-heart-nest.yaml` 的完整原文。要求默认 namespace 为 `ns-i61rahoe`。 |
+| `DEEPSEEK_API_KEY` | 有效的 DeepSeek API Key。仅由服务端使用，绝不写入 `VITE_` 环境变量。 |
 
-## 资源
+不要把这两项写入仓库、Issue 或 Actions 日志。配置完成后，在 [部署工作流](https://github.com/wincax88/HeartNest/actions/workflows/deploy-sealos.yml) 点击 **Run workflow**；之后向 `main` 推送即可自动部署。Action 会在缺少 Secret 时立即停止，不会切换现有服务。
 
-- `persistentvolumeclaim/heartnest-web`
-- `configmap/heartnest-web`
-- `deployment/heartnest-web`
-- `service/heartnest-web`
-- `ingress/heartnest-web`
+Sealos 控制台为 `https://gzg.sealos.run/`；该集群现有 HeartNest 应用域名是 <https://heartnest-ns-i61rahoe.gzg.sealos.run/>。部署成功后，`/api/health` 应返回 `{"ok":true}`。前端默认使用同源 `/api`，部署时无需设置 `VITE_API_BASE_URL`。
 
-`pod/heartnest-uploader` 只在发布期间存在，上传完成后会被删除。
+## 资源与回滚
 
-## 回滚
+- `persistentvolumeclaim/heartnest-web`：现有 PVC。`/releases/<SHA>` 是不可变发布版本，`/data/heartnest.json` 是持久化数据。
+- `secret/heartnest-ai`：由 Action 从仓库 Secret 同步 DeepSeek Key。
+- `deployment/heartnest-web`、`service/heartnest-web`、`ingress/heartnest-web`：既有应用入口。Deployment 用 `Recreate` 策略，单副本部署时会有短暂中断。
+- `pod/heartnest-actions-uploader`：仅在上传时存在，Action 会删除。
 
-本方案的静态文件直接更新 PVC。需要内容级回滚时，在目标提交执行 `publish.ps1` 重新构建并覆盖站点。工作负载级回滚可执行：
-
-```powershell
-kubectl --kubeconfig '<kubeconfig>' -n ns-i61rahoe rollout undo deployment/heartnest-web
-```
-
-不要把 kubeconfig、token 或证书内容写入仓库。
+部署失败时，先看 Actions 日志与 `kubectl -n ns-i61rahoe describe deployment heartnest-web`。工作负载回滚可执行 `kubectl -n ns-i61rahoe rollout undo deployment/heartnest-web`；历史版本仍保留在 PVC。旧的 `publish.ps1` / `workload.yaml` 是静态 nginx 发布方案，不应再用于这个 Node API 服务，否则会把工作负载切回静态版。
