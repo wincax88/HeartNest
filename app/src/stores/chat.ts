@@ -40,10 +40,12 @@ export const useChatStore = defineStore('chat', {
       this.error = ''
       try {
         const result = await api.sendMessage(this.companionId, { text: content, moodId: this.moodId, clientMessageId: id })
-        Object.assign(optimistic, result.userMessage)
+        const pendingIndex = this.messages.findIndex((message) => message.id === id)
+        if (pendingIndex !== -1) this.messages[pendingIndex] = result.userMessage
         this.messages.push(result.companionMessage)
       } catch (error) {
-        optimistic.status = 'failed'
+        const pendingIndex = this.messages.findIndex((message) => message.id === id)
+        if (pendingIndex !== -1) this.messages[pendingIndex] = { ...this.messages[pendingIndex], status: 'failed' }
         this.error = error instanceof Error ? error.message : '发送失败'
         throw error
       } finally {

@@ -1,6 +1,6 @@
 # HeartNest on Sealos
 
-GitHub Actions 在 `main` 分支的应用或部署文件变更后自动部署，也可从 Actions 页面手动运行。它会测试并构建 H5、安装 API 生产依赖，将提交 SHA 对应的完整版本上传到已有的 1Gi PVC，再把同一个 Service/Ingress 切换至 Node API。用户数据单独保存在 PVC 的 `/data/heartnest.json`，不会被发布过程覆盖。
+GitHub Actions 在 `main` 分支的应用或部署文件变更后自动部署，也可从 Actions 页面手动运行。它会测试并构建 H5、安装 API 生产依赖，将提交 SHA 对应的完整版本上传到已有的 1Gi PVC，再把同一个 Service/Ingress 切换至 Node API。重新运行同一提交也会更新 Pod，以加载轮换后的 Secret。用户数据单独保存在 PVC 的 `/data/heartnest.json`，不会被发布过程覆盖。
 
 ## 首次设置
 

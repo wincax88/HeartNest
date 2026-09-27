@@ -29,6 +29,7 @@ describe('companion and chat pages', () => {
     expect(wrapper.text()).toContain('正在回应')
     await flushPromises()
     expect(wrapper.text()).toContain('撑了很久')
+    expect(wrapper.text()).not.toContain('发送中')
   })
 
   it('does not send blank input', async () => {

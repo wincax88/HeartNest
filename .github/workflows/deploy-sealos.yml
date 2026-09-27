@@ -120,7 +120,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed "s/__RELEASE_SHA__/$GITHUB_SHA/g" deploy/workload-actions.yaml > "$RUNNER_TEMP/heartnest-workload.yaml"
+          sed -e "s/__RELEASE_SHA__/$GITHUB_SHA/g" \
+            -e "s/__DEPLOY_RUN__/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/g" \
+            deploy/workload-actions.yaml > "$RUNNER_TEMP/heartnest-workload.yaml"
           kubectl -n ns-i61rahoe apply -f "$RUNNER_TEMP/heartnest-workload.yaml"
           kubectl -n ns-i61rahoe rollout status deployment/heartnest-web --timeout=240s
 

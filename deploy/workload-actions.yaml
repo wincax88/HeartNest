@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/name: heartnest-web
       annotations:
         heartnest.dev/release: "__RELEASE_SHA__"
+        heartnest.dev/deploy-run: "__DEPLOY_RUN__"
     spec:
       securityContext:
         runAsNonRoot: true
