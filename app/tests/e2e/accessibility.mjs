@@ -2,6 +2,7 @@ import { AxeBuilder } from '@axe-core/playwright'
 import { chromium } from '@playwright/test'
 import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,7 +19,8 @@ const server = createServer(async (request, response) => {
 })
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 const baseUrl = `http://127.0.0.1:${server.address().port}`
-const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true })
+const windowsChrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const browser = await chromium.launch({ ...(existsSync(windowsChrome) ? { executablePath: windowsChrome } : {}), headless: true })
 const failures = []
 
 try {

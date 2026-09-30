@@ -55,6 +55,10 @@ jobs:
           npm run test:e2e
           npm run type-check
           npm run build:h5
+          npx playwright install --with-deps chromium
+          npm run test:a11y
+          npm run build:mp-weixin
+          npm run build:app
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -70,7 +74,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: 构建并推送备份工具镜像
-        id: backup-image
+        id: backup_image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -100,7 +104,7 @@ jobs:
           echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
           image="${IMAGE_REPOSITORY}@${{ steps.image.outputs.digest }}"
           echo "IMAGE=$image" >> "$GITHUB_ENV"
-          backup_image="${IMAGE_REPOSITORY}-backup@${{ steps.backup-image.outputs.digest }}"
+          backup_image="${IMAGE_REPOSITORY}-backup@${{ steps.backup_image.outputs.digest }}"
           echo "BACKUP_IMAGE=$backup_image" >> "$GITHUB_ENV"
           kubectl -n "$NAMESPACE" create secret docker-registry heartnest-registry --docker-server=ghcr.io --docker-username="$GHCR_PULL_USER" --docker-password="$GHCR_PULL_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n "$NAMESPACE" create secret generic heartnest-runtime --from-env-file="$RUNNER_TEMP/runtime.env" --dry-run=client -o yaml | kubectl apply -f -
