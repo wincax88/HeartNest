@@ -42,6 +42,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "test:e2e": "node tests/e2e/flow-smoke.mjs",
+    "test:visual": "node tests/e2e/visual-smoke.mjs",
     "db:migrate": "node server/db/migrate.mjs",
     "migrate:json": "node server/migrate-json.mjs",
     "start": "node server/index.mjs"

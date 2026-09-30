@@ -1,49 +1,25 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import HnIcon from '../HnIcon.vue'
 
-const props = withDefaults(defineProps<{ type?: string; size?: number | string; color?: string }>(), {
-  type: '', size: 24, color: 'currentColor',
+withDefaults(defineProps<{
+  type?: string
+  size?: number | string
+  color?: string
+  label?: string
+  decorative?: boolean
+}>(), {
+  type: 'heart-filled',
+  size: 24,
+  color: 'currentColor',
+  label: '',
+  decorative: true,
 })
-
-const glyphs: Record<string, string> = {
-  'heart-filled': '♥',
-  'home-filled': '⌂',
-  'person-filled': '●',
-  'cloud-filled': '☁',
-  'calendar-filled': '▣',
-  calendar: '▣',
-  'fire-filled': '◆',
-  'vip-filled': '♛',
-  'star-filled': '★',
-  'gear-filled': '⚙',
-  'checkbox-filled': '✓',
-  'chatboxes-filled': '◌',
-  'paperplane-filled': '➤',
-  'sound-filled': '◖',
-  list: '≡',
-  left: '‹',
-  right: '›',
-}
-
-const glyph = computed(() => glyphs[props.type] ?? '•')
-const fontSize = computed(() => `${Number(props.size) || 24}px`)
 </script>
 
 <template>
-  <text class="hn-icon" :style="{ color, fontSize }" aria-hidden="true">{{ glyph }}</text>
+  <HnIcon :name="type" :size="size" :color="color" :label="label" :decorative="decorative" />
 </template>
 
 <style scoped>
-.hn-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1em;
-  height: 1em;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-style: normal;
-  font-weight: 700;
-  line-height: 1;
-  text-align: center;
-}
+:deep(.hn-icon) { display: block; }
 </style>

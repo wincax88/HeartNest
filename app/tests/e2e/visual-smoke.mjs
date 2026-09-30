@@ -1,10 +1,28 @@
 import { chromium } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import { mkdir, readFile, stat } from 'node:fs/promises'
+import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const baseUrl = process.env.HEARTNEST_URL ?? 'http://127.0.0.1:4173'
+const dist = fileURLToPath(new URL('../../dist/build/h5/', import.meta.url))
 const outputDir = new URL('../../artifacts/visual-qa/', import.meta.url)
 await mkdir(outputDir, { recursive: true })
+
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' }
+const server = createServer(async (request, response) => {
+  try {
+    const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
+    let path = join(dist, pathname === '/' ? 'index.html' : pathname)
+    if (!(await stat(path)).isFile()) path = join(dist, 'index.html')
+    response.setHeader('content-type', mime[extname(path)] ?? 'application/octet-stream')
+    response.end(await readFile(path))
+  } catch {
+    response.statusCode = 404
+    response.end('Not found')
+  }
+})
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+const baseUrl = process.env.HEARTNEST_URL ?? `http://127.0.0.1:${server.address().port}`
 
 const browser = await chromium.launch({
   executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -28,6 +46,7 @@ for (const route of routes) {
 }
 
 await browser.close()
+await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 if (runtimeErrors.length) {
   throw new Error(`Browser runtime errors:\n${runtimeErrors.join('\n')}`)
 }
