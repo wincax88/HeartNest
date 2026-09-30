@@ -21,6 +21,8 @@ npm run dev:h5
 
 H5 开发服务会将 `/api` 代理到 `http://127.0.0.1:8787`。微信小程序与 App 请通过 `VITE_API_BASE_URL` 指定允许访问的 HTTPS 服务地址。
 
+发布构建不会把平台标识提交到仓库。分别设置 `HEARTNEST_WECHAT_APP_ID` 或 `HEARTNEST_APP_ID` 后运行 `npm run build:release:mp-weixin` / `npm run build:release:app`；脚本会临时注入标识、构建并在退出时恢复开发 manifest。缺少标识时发布构建会直接失败。微信小程序发布始终启用合法域名校验；App 只声明网络状态、提醒振动和保持唤醒所需权限。
+
 ## 身份、隐私与数据
 
 - `POST /api/auth/provider`：交换小程序、App 或 H5 微信授权码。

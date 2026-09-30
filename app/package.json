@@ -37,6 +37,8 @@
     "build:quickapp-webview-huawei": "uni build -p quickapp-webview-huawei",
     "build:quickapp-webview-union": "uni build -p quickapp-webview-union",
     "build:app": "uni build -p app",
+    "build:release:mp-weixin": "node scripts/build-release.mjs mp-weixin",
+    "build:release:app": "node scripts/build-release.mjs app",
     "type-check": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
