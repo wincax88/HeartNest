@@ -23,3 +23,19 @@ Sealos 控制台为 `https://gzg.sealos.run/`；该集群现有 HeartNest 应用
 - `pod/heartnest-actions-uploader`：仅在上传时存在，Action 会删除。
 
 部署失败时，先看 Actions 日志与 `kubectl -n ns-i61rahoe describe deployment heartnest-web`。工作负载回滚可执行 `kubectl -n ns-i61rahoe rollout undo deployment/heartnest-web`；历史版本仍保留在 PVC。旧的 `publish.ps1` / `workload.yaml` 是静态 nginx 发布方案，不应再用于这个 Node API 服务，否则会把工作负载切回静态版。
+
+## JSON 数据迁移
+
+旧 `/data/heartnest.json` 迁移到 PostgreSQL 时必须先保存只读副本，再执行 dry-run：
+
+```powershell
+npm run migrate:json -- --source C:\path\to\heartnest.json --dry-run
+```
+
+确认汇总数量后，在维护窗口设置 `DATABASE_URL` 并执行真实导入。导入按匿名设备标识的 SHA-256 摘要幂等，重复运行只会增加 `skippedUsers`，不会复制消息。完成后执行：
+
+```powershell
+npm run migrate:json -- --source C:\path\to\heartnest.json --verify-only
+```
+
+只有输出 `"verified":true` 才能进入数据库切换步骤。命令只输出计数，不输出设备标识或对话正文。迁移观察期结束前不得删除原 JSON 副本。

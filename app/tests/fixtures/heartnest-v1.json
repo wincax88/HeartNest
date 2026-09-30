@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "users": {
+    "device-legacy-user": {
+      "profile": {
+        "displayName": "旧用户",
+        "avatar": "",
+        "preferredCompanionId": "mika"
+      },
+      "membership": {
+        "tier": "free",
+        "title": "心栖体验",
+        "benefits": ["每日对话"]
+      },
+      "preferences": {
+        "notificationsEnabled": true,
+        "replyStyle": "gentle",
+        "memoryPromptsEnabled": true,
+        "onboardingCompleted": true
+      },
+      "moodRecords": [
+        {
+          "id": "mood-legacy",
+          "date": "2026-09-20T20:00:00.000Z",
+          "moodId": "tired",
+          "summary": "今天感到疲惫"
+        }
+      ],
+      "threads": [
+        {
+          "id": "thread-mika",
+          "companionId": "mika",
+          "createdAt": "2026-09-20T20:00:00.000Z",
+          "messages": [
+            {
+              "id": "user-legacy-1",
+              "sender": "user",
+              "content": "今天有点累",
+              "createdAt": "2026-09-20T20:01:00.000Z",
+              "status": "sent"
+            },
+            {
+              "id": "companion-legacy-1",
+              "sender": "companion",
+              "content": "我在这里听你说。",
+              "createdAt": "2026-09-20T20:01:10.000Z",
+              "status": "sent"
+            }
+          ]
+        }
+      ],
+      "memories": [
+        {
+          "id": "memory-legacy-1",
+          "title": "疲惫的一天",
+          "summary": "今天有点累",
+          "createdAt": "2026-09-20T20:02:00.000Z",
+          "sourceThreadId": "thread-mika",
+          "retained": true
+        }
+      ],
+      "feedback": []
+    }
+  }
+}
