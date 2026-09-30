@@ -7,8 +7,8 @@
 
 **Implementation screenshot path**
 
-- `C:\github\HeartNest\.worktrees\fix-home-companion-layout\app\artifacts\visual-qa\home-layout-fixed.png`
-- Combined comparison: `C:\github\HeartNest\.worktrees\fix-home-companion-layout\app\artifacts\visual-qa\home-layout-comparison.png`
+- `C:\github\HeartNest\app\artifacts\visual-qa\home-layout-fixed.png`
+- Combined comparison: `C:\github\HeartNest\app\artifacts\visual-qa\home-layout-comparison.png`
 
 **Viewport and normalization**
 
