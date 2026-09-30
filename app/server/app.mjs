@@ -1,5 +1,7 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import helmet from 'helmet'
 import { createAuthMiddleware } from './auth/middleware.mjs'
 import { companionIds, moodIds, moods } from './catalog.mjs'
 
@@ -13,11 +15,29 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, authService = null, privacyService = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
+  app.use(helmet({ contentSecurityPolicy: false }))
   app.use(express.json({ limit: '32kb' }))
+  const limiterKey = (req) => req.userId || req.deviceId || ipKeyGenerator(req.ip)
+  const chatMinuteLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 12,
+    keyGenerator: limiterKey,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_RATE_LIMIT', message: '发送得有点快，请稍后再试', retryAfterSeconds: 60 } }),
+  })
+  const chatDayLimiter = rateLimit({
+    windowMs: 86_400_000,
+    limit: 100,
+    keyGenerator: limiterKey,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_DAILY_LIMIT', message: '今天的对话额度已用完', retryAfterSeconds: 86_400 } }),
+  })
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
   if (authService) {
@@ -128,7 +148,7 @@ export function createApi({ store, responder, authService = null, privacyService
     res.json(thread)
   }))
 
-  app.post('/api/chats/:companionId/messages', route(async (req, res) => {
+  app.post('/api/chats/:companionId/messages', chatMinuteLimiter, chatDayLimiter, route(async (req, res) => {
     const companionId = req.params.companionId
     const { text, moodId, clientMessageId } = req.body ?? {}
     if (!companionIds.has(companionId)) throw httpError(404, 'COMPANION_NOT_FOUND', '陪伴者不存在')
@@ -141,7 +161,7 @@ export function createApi({ store, responder, authService = null, privacyService
       const thread = store.findThread(user, companionId)
       let userMessage = thread.messages.find((item) => item.id === clientMessageId)
       if (!userMessage) {
-        userMessage = { id: clientMessageId, sender: 'user', content: text.trim(), createdAt: new Date().toISOString(), status: 'sending' }
+        userMessage = { id: clientMessageId, sender: 'user', content: text.trim(), createdAt: new Date().toISOString(), status: 'sending', riskLevel: 'normal' }
         thread.messages.push(userMessage)
       } else {
         userMessage.status = 'sending'
@@ -150,14 +170,17 @@ export function createApi({ store, responder, authService = null, privacyService
     })
 
     try {
-      const content = await responder({ companionId, moodId, messages: context.messages, replyStyle: context.replyStyle })
+      const response = safeResponder
+        ? await safeResponder({ companionId, moodId, messages: context.messages, replyStyle: context.replyStyle })
+        : { content: await responder({ companionId, moodId, messages: context.messages, replyStyle: context.replyStyle }), riskLevel: 'normal' }
       const result = await store.update(req.deviceId, (user) => {
         const thread = store.findThread(user, companionId)
         const userMessage = thread.messages.find((item) => item.id === clientMessageId)
         userMessage.status = 'sent'
+        userMessage.riskLevel = response.riskLevel
         let companionMessage = thread.messages.find((item) => item.replyTo === clientMessageId)
         if (!companionMessage) {
-          companionMessage = { id: randomUUID(), sender: 'companion', content, createdAt: new Date().toISOString(), status: 'sent', replyTo: clientMessageId }
+          companionMessage = { id: randomUUID(), sender: 'companion', content: response.content, createdAt: new Date().toISOString(), status: 'sent', replyTo: clientMessageId }
           thread.messages.push(companionMessage)
         }
         return { threadId: thread.id, userMessage, companionMessage }
