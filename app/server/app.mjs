@@ -4,6 +4,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import helmet from 'helmet'
 import { createAuthMiddleware } from './auth/middleware.mjs'
 import { companionIds, moodIds, moods } from './catalog.mjs'
+import { createObservability } from './observability.mjs'
 
 const validReplyStyles = new Set(['gentle', 'concise', 'reflective'])
 
@@ -15,11 +16,12 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null, repositories = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null, repositories = null, observability = createObservability() }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
   app.use(helmet({ contentSecurityPolicy: false }))
+  app.use(observability.middleware)
   app.use(express.json({
     limit: '32kb',
     verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer) },
@@ -42,6 +44,7 @@ export function createApi({ store, responder, safeResponder = null, authService 
     handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_DAILY_LIMIT', message: '今天的对话额度已用完', retryAfterSeconds: 86_400 } }),
   })
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
+  app.get('/metrics', observability.metricsHandler)
 
   if (paymentService) {
     app.post('/api/payments/wechat/callback', route(async (req, res) => {
@@ -314,10 +317,10 @@ export function createApi({ store, responder, safeResponder = null, authService 
 
   app.use('/api', (_req, _res, next) => next(httpError(404, 'API_NOT_FOUND', '接口不存在')))
 
-  app.use((error, _req, res, _next) => {
+  app.use((error, req, res, _next) => {
     const status = error instanceof SyntaxError && 'body' in error ? 400 : (Number.isInteger(error.status) ? error.status : 500)
-    if (status >= 500) console.error(error)
-    res.status(status).json({ error: { code: error.code ?? (status === 400 ? 'INVALID_JSON' : 'INTERNAL_ERROR'), message: status === 500 ? '服务器暂时开了个小差' : error.message } })
+    if (status >= 500) observability.error(error, req)
+    res.status(status).json({ requestId: req.requestId, error: { code: error.code ?? (status === 400 ? 'INVALID_JSON' : 'INTERNAL_ERROR'), message: status === 500 ? '服务器暂时开了个小差' : error.message } })
   })
   return app
 }

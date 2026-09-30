@@ -5,22 +5,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $deployRoot = Split-Path -Parent $PSCommandPath
-$requiredFiles = @('Dockerfile', 'app.yaml', 'postgres.yaml', 'migrate-job.yaml')
+$requiredFiles = @('Dockerfile', 'backup.Dockerfile', 'app.yaml', 'postgres.yaml', 'migrate-job.yaml', 'backup-cronjob.yaml', 'restore-check-cronjob.yaml')
 
 foreach ($file in $requiredFiles) {
   $path = Join-Path $deployRoot $file
   if (-not (Test-Path -LiteralPath $path)) { throw "Missing deployment file: $file" }
 }
 
-$manifestPaths = @('app.yaml', 'postgres.yaml', 'migrate-job.yaml') |
+$manifestPaths = @('app.yaml', 'postgres.yaml', 'migrate-job.yaml', 'backup-cronjob.yaml', 'restore-check-cronjob.yaml') |
   ForEach-Object { Join-Path $deployRoot $_ }
 $manifestText = Get-Content -Raw -LiteralPath $manifestPaths
 $workloadText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'app.yaml')
 $postgresText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'postgres.yaml')
 $migrationText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'migrate-job.yaml')
+$backupText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'backup-cronjob.yaml')
+$restoreText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'restore-check-cronjob.yaml')
 $workflowText = Get-Content -Raw -LiteralPath (Join-Path (Split-Path -Parent $deployRoot) '.github\workflows\deploy-sealos.yml')
 $apiText = Get-Content -Raw -LiteralPath (Join-Path (Split-Path -Parent $deployRoot) 'app\server\app.mjs')
 $dockerText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'Dockerfile')
+$backupDockerText = Get-Content -Raw -LiteralPath (Join-Path $deployRoot 'backup.Dockerfile')
 
 if ($manifestText -match 'client-key-data|certificate-authority-data|\btoken\s*:') { throw 'Deployment files must never contain kubeconfig credentials.' }
 if ($manifestText -match 'widget-demo-db') { throw 'HeartNest manifests must not reference widget-demo-db.' }
@@ -35,12 +38,19 @@ if ($postgresText -notmatch 'kind:\s+StatefulSet[\s\S]+name:\s+heartnest-postgre
 if ($postgresText -notmatch 'image:\s+postgres:16-alpine') { throw 'PostgreSQL must use the pinned 16-alpine image.' }
 if ($migrationText -notmatch 'kind:\s+Job[\s\S]+name:\s+heartnest-db-migrate') { throw 'A database migration Job is required.' }
 if ($migrationText -notmatch 'server/db/migrate\.mjs') { throw 'Migration Job must run the database migration entry point.' }
+foreach ($required in @('pg_dump', 'aes-256-cbc', 'pbkdf2', 'BACKUP_ENCRYPTION_KEY', '-mtime +30')) {
+  if ($backupText -notmatch [regex]::Escape($required)) { throw "Backup job is missing: $required" }
+}
+foreach ($required in @('pg_restore', 'CREATE DATABASE', 'DROP DATABASE', 'latest-restore-status.json', 'audit_events')) {
+  if ($restoreText -notmatch [regex]::Escape($required)) { throw "Restore check is missing: $required" }
+}
 if ($apiText -notmatch 'app\.use\(helmet\(') { throw 'API security headers must be enabled through Helmet.' }
 foreach ($workflowRequirement in @('docker/build-push-action', 'heartnest-db-migrate', 'rollout undo', '/api/health', '__IMAGE__')) {
   if ($workflowText -notmatch [regex]::Escape($workflowRequirement)) { throw "Deployment workflow is missing: $workflowRequirement" }
 }
 if ($dockerText -notmatch 'FROM node@sha256:') { throw 'Docker base images must be pinned by digest.' }
 if ($dockerText -notmatch 'USER node') { throw 'Container must run as the node user.' }
+if ($backupDockerText -notmatch 'postgres@sha256:' -or $backupDockerText -notmatch 'apk add --no-cache openssl') { throw 'Backup image must pin PostgreSQL and include OpenSSL.' }
 if ($workflowText -match 'PVC|uploader\.yaml|workload-actions\.yaml|workload\.yaml|publish\.ps1') { throw 'Workflow must not use the legacy PVC uploader flow.' }
 
 Write-Host 'Static deployment checks passed.'

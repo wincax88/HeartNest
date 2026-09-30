@@ -69,6 +69,16 @@ jobs:
           tags: ${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: 构建并推送备份工具镜像
+        id: backup-image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/backup.Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_REPOSITORY }}-backup:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - uses: azure/setup-kubectl@v4
         with: { version: v1.29.15 }
@@ -79,19 +89,23 @@ jobs:
           GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER }}
           RUNTIME_ENV: ${{ secrets.HEARTNEST_RUNTIME_ENV }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
           umask 077
-          test -n "$HEARTNEST_KUBECONFIG" && test -n "$GHCR_PULL_TOKEN" && test -n "$GHCR_PULL_USER" && test -n "$RUNTIME_ENV" && test -n "$DEEPSEEK_API_KEY"
+          test -n "$HEARTNEST_KUBECONFIG" && test -n "$GHCR_PULL_TOKEN" && test -n "$GHCR_PULL_USER" && test -n "$RUNTIME_ENV" && test -n "$DEEPSEEK_API_KEY" && test -n "$BACKUP_ENCRYPTION_KEY"
           printf '%s' "$HEARTNEST_KUBECONFIG" > "$RUNNER_TEMP/kubeconfig"
           printf '%s' "$RUNTIME_ENV" > "$RUNNER_TEMP/runtime.env"
           export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
           echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
           image="${IMAGE_REPOSITORY}@${{ steps.image.outputs.digest }}"
           echo "IMAGE=$image" >> "$GITHUB_ENV"
+          backup_image="${IMAGE_REPOSITORY}-backup@${{ steps.backup-image.outputs.digest }}"
+          echo "BACKUP_IMAGE=$backup_image" >> "$GITHUB_ENV"
           kubectl -n "$NAMESPACE" create secret docker-registry heartnest-registry --docker-server=ghcr.io --docker-username="$GHCR_PULL_USER" --docker-password="$GHCR_PULL_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n "$NAMESPACE" create secret generic heartnest-runtime --from-env-file="$RUNNER_TEMP/runtime.env" --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n "$NAMESPACE" create secret generic heartnest-ai --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret generic heartnest-backup --from-literal=BACKUP_ENCRYPTION_KEY="$BACKUP_ENCRYPTION_KEY" --dry-run=client -o yaml | kubectl apply -f -
 
       - name: 迁移数据库
         run: |
@@ -102,6 +116,9 @@ jobs:
           kubectl -n "$NAMESPACE" delete job heartnest-db-migrate --ignore-not-found --wait=true
           kubectl apply -f "$RUNNER_TEMP/migrate.yaml"
           kubectl -n "$NAMESPACE" wait --for=condition=Complete job/heartnest-db-migrate --timeout=300s
+          sed "s|__BACKUP_IMAGE__|$BACKUP_IMAGE|g" deploy/backup-cronjob.yaml > "$RUNNER_TEMP/backup.yaml"
+          sed "s|__BACKUP_IMAGE__|$BACKUP_IMAGE|g" deploy/restore-check-cronjob.yaml > "$RUNNER_TEMP/restore-check.yaml"
+          kubectl apply -f "$RUNNER_TEMP/backup.yaml" -f "$RUNNER_TEMP/restore-check.yaml"
 
       - name: 滚动发布并业务冒烟
         run: |
