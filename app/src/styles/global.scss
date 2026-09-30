@@ -44,7 +44,15 @@ input:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  view,
+  text,
+  button,
+  input,
+  textarea,
+  scroll-view,
+  swiper,
+  swiper-item,
+  image {
     scroll-behavior: auto !important;
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
