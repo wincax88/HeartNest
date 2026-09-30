@@ -1,46 +1,85 @@
-import { chromium } from '@playwright/test'
+import { createServer } from 'node:http'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { createApi } from '../../server/app.mjs'
+import { createAuthService } from '../../server/auth/service.mjs'
+import { createTokenService } from '../../server/auth/tokens.mjs'
+import { createPool } from '../../server/db/client.mjs'
+import { runMigrations } from '../../server/db/migrate.mjs'
+import { createRepositories } from '../../server/db/repositories.mjs'
+import { createPrivacyService } from '../../server/privacy.mjs'
+import { createEntitlementService } from '../../server/entitlements.mjs'
+import { createPaymentService } from '../../server/payments/service.mjs'
+import { createNotificationService } from '../../server/notifications/service.mjs'
+import { createContentService } from '../../server/content.mjs'
+import { createStore } from '../../server/store.mjs'
+import { createE2EAdapters } from './test-adapters.mjs'
 
-const baseUrl = process.env.HEARTNEST_URL ?? 'http://127.0.0.1:4173'
-const browser = await chromium.launch({
-  executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  headless: true,
-})
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) throw new Error('DATABASE_URL is required for isolated E2E')
+const pool = createPool(databaseUrl)
+const directory = await mkdtemp(join(tmpdir(), 'heartnest-e2e-'))
+let server
 
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
-const errors = []
-page.on('pageerror', (error) => errors.push(error.message))
+try {
+  await runMigrations(pool)
+  const repositories = createRepositories(pool)
+  const adapters = createE2EAdapters({ nodeEnv: 'test' })
+  const authService = createAuthService({ repositories, tokenService: createTokenService({ signingKey: 'e2e-signing-key-at-least-32-bytes' }), providers: adapters.providers, identityHashKey: 'e2e-identity-key' })
+  const privacyService = createPrivacyService({ repositories, versions: { privacyVersion: '2026-09-30', termsVersion: '2026-09-30', aiVersion: '2026-09-30' } })
+  const app = createApi({
+    store: createStore(join(directory, 'heartnest.json')), responder: adapters.responder, authService, privacyService,
+    entitlementService: createEntitlementService({ repositories }),
+    paymentService: createPaymentService({ repositories, adapter: adapters.payment }),
+    notificationService: createNotificationService({ repositories }),
+    contentService: createContentService({ repositories, avatarOrigins: ['https://cdn.heartnest.test'] }), repositories,
+  })
+  server = createServer(app)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${server.address().port}/api`
+  const request = (path, options = {}, token = null) => fetch(`${base}${path}`, { ...options, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...options.headers } })
+  const identity = `e2e-${randomUUID()}`
+  const login = await request('/auth/provider', { method: 'POST', body: JSON.stringify({ provider: 'wechat_mini_program', code: identity }) })
+  if (!login.ok) throw new Error(`E2E login failed: ${login.status}`)
+  const session = await login.json()
+  const token = session.accessToken
+  await request('/privacy/consents', { method: 'POST', body: JSON.stringify({ privacyVersion: '2026-09-30', termsVersion: '2026-09-30', aiVersion: '2026-09-30' }) }, token)
 
-await page.goto(`${baseUrl}/#/pages/onboarding/index`, { waitUntil: 'networkidle' })
-await page.locator('uni-button').filter({ hasText: '开始体验' }).click()
-await page.getByText('晚上好，Michael').waitFor()
+  const clientMessageId = `retry-${randomUUID()}`
+  const messageBody = JSON.stringify({ text: '请测试重试', moodId: 'calm', clientMessageId })
+  const failed = await request('/chats/mika/messages', { method: 'POST', body: messageBody }, token)
+  if (failed.status !== 500) throw new Error(`Expected first model attempt to fail, got ${failed.status}`)
+  const retried = await request('/chats/mika/messages', { method: 'POST', body: messageBody }, token)
+  if (retried.status !== 201) throw new Error(`Retry failed: ${retried.status}`)
+  const chat = await retried.json()
+  if (chat.userMessage.clientMessageId !== clientMessageId) throw new Error('Retry did not preserve client message id')
 
-await page.getByTestId('companion-mika').click()
-await page.getByText('ABOUT ME').waitFor()
-await page.getByTestId('profile-chat').click()
-await page.getByText('我在这里。').waitFor()
+  const favorite = await request('/favorites', { method: 'POST', body: JSON.stringify({ messageId: chat.userMessage.id }) }, token)
+  if (favorite.status !== 201) throw new Error(`Favorite failed: ${favorite.status}; message=${JSON.stringify(chat.userMessage)}; body=${await favorite.text()}`)
+  const favorites = await request('/favorites', {}, token).then((response) => response.json())
+  if (favorites.length !== 1) throw new Error('Favorite was not persisted')
+  const profile = await request('/profile', { method: 'PATCH', body: JSON.stringify({ displayName: 'E2E 用户', avatarUrl: 'https://cdn.heartnest.test/e2e.png' }) }, token)
+  if (!profile.ok || (await profile.json()).displayName !== 'E2E 用户') throw new Error('Profile update failed')
 
-await page.getByTestId('chat-input').locator('input').fill('今天有点累')
-await page.getByTestId('chat-send').click()
-await page.getByText('听起来你今天撑了很久。先不用急着整理，慢慢说也可以。').waitFor()
+  const deviceToken = `device-${identity}`
+  await request('/notifications/devices', { method: 'POST', body: JSON.stringify({ platform: 'app', token: deviceToken }) }, token)
+  const reminder = await request('/reminders', { method: 'POST', body: JSON.stringify({ channel: 'app', time: '20:30', timeZone: 'Asia/Shanghai', quietStart: '22:00', quietEnd: '08:00', target: { token: deviceToken }, payload: { title: 'E2E' } }) }, token)
+  if (reminder.status !== 201) throw new Error(`Reminder creation failed: ${reminder.status}`)
 
-await page.goto(`${baseUrl}/#/pages/review/index`, { waitUntil: 'networkidle' })
-await page.reload({ waitUntil: 'networkidle' })
-if ((await page.getByTestId('review-day').count()) !== 7) throw new Error('Review chart does not contain seven days.')
-if ((await page.getByTestId('memory-item').count()) !== 3) throw new Error('Review does not contain three memories.')
+  const orderResponse = await request('/payments/orders', { method: 'POST', body: JSON.stringify({ productId: 'heartnest-pro-monthly', clientType: 'app' }) }, token)
+  if (orderResponse.status !== 201) throw new Error(`Payment order failed: ${orderResponse.status}`)
+  const order = await orderResponse.json()
+  const callback = await request('/payments/wechat/callback', { method: 'POST', body: JSON.stringify({ event: { merchantOrderNo: order.merchantOrderNo, platformTransactionId: `wx-${identity}`, amount: 1800, currency: 'CNY', status: 'SUCCESS' } }) })
+  if (callback.status !== 204) throw new Error(`Payment callback failed: ${callback.status}`)
+  const paid = await request(`/payments/orders/${order.id}`, {}, token).then((response) => response.json())
+  if (paid.status !== 'paid') throw new Error('Verified callback did not grant membership')
 
-await page.goto(`${baseUrl}/#/pages/profile/index`, { waitUntil: 'networkidle' })
-await page.reload({ waitUntil: 'networkidle' })
-await page.getByTestId('open-settings').click()
-await page.getByText('温柔提醒').waitFor()
-await page.getByTestId('notification-toggle').click()
-
-await page.goto(`${baseUrl}/#/pages/profile/index`, { waitUntil: 'networkidle' })
-await page.reload({ waitUntil: 'networkidle' })
-await page.getByTestId('open-membership').click()
-await page.getByText('让陪伴，记得更久一点').waitFor()
-await page.getByTestId('upgrade-membership').click()
-await page.getByText('已解锁心栖会员').waitFor()
-
-await browser.close()
-if (errors.length) throw new Error(`Browser runtime errors:\n${errors.join('\n')}`)
-console.log('HeartNest end-to-end flow passed.')
+  await pool.query('DELETE FROM users WHERE id = $1', [session.userId])
+  console.log('HeartNest isolated end-to-end behavior passed.')
+} finally {
+  if (server) await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  await pool.end()
+  await rm(directory, { recursive: true, force: true })
+}

@@ -50,41 +50,6 @@ export function createApi({ store, responder, safeResponder = null, authService 
     }))
   }
 
-  if (notificationService) {
-    app.post('/api/notifications/devices', route(async (req, res) => {
-      res.status(201).json(await notificationService.registerDevice(req.userId, req.body || {}))
-    }))
-    app.post('/api/notifications/authorizations', route(async (req, res) => {
-      res.status(201).json(await notificationService.authorizeTemplate(req.userId, req.body || {}))
-    }))
-    app.get('/api/reminders', route(async (req, res) => res.json(await notificationService.listSchedules(req.userId))))
-    app.post('/api/reminders', route(async (req, res) => {
-      res.status(201).json(await notificationService.createSchedule(req.userId, req.body || {}))
-    }))
-    app.put('/api/reminders/:id', route(async (req, res) => {
-      res.json(await notificationService.updateSchedule(req.userId, req.params.id, req.body || {}))
-    }))
-    app.delete('/api/reminders/:id', route(async (req, res) => {
-      await notificationService.deleteSchedule(req.userId, req.params.id)
-      res.status(204).end()
-    }))
-  }
-
-  if (contentService) {
-    app.patch('/api/profile', route(async (req, res) => res.json(await contentService.updateProfile(req.userId, req.body || {}))))
-    app.get('/api/favorites', route(async (req, res) => res.json(await contentService.listFavorites(req.userId))))
-    app.post('/api/favorites', route(async (req, res) => {
-      res.status(201).json(await contentService.favoriteMessage(req.userId, req.body?.messageId))
-    }))
-    app.delete('/api/favorites/:id', route(async (req, res) => {
-      await contentService.deleteFavorite(req.userId, req.params.id)
-      res.status(204).end()
-    }))
-    app.get('/api/review', route(async (req, res) => {
-      res.json(await contentService.review(req.userId, { from: req.query.from, to: req.query.to, mood: req.query.mood }))
-    }))
-  }
-
   if (authService) {
     app.post('/api/auth/provider', route(async (req, res) => {
       const session = await authService.login({
@@ -160,6 +125,41 @@ export function createApi({ store, responder, safeResponder = null, authService 
     }))
     app.get('/api/payments/orders/:id', route(async (req, res) => {
       res.json(await paymentService.getOrder(req.userId, req.params.id))
+    }))
+  }
+
+  if (notificationService) {
+    app.post('/api/notifications/devices', route(async (req, res) => {
+      res.status(201).json(await notificationService.registerDevice(req.userId, req.body || {}))
+    }))
+    app.post('/api/notifications/authorizations', route(async (req, res) => {
+      res.status(201).json(await notificationService.authorizeTemplate(req.userId, req.body || {}))
+    }))
+    app.get('/api/reminders', route(async (req, res) => res.json(await notificationService.listSchedules(req.userId))))
+    app.post('/api/reminders', route(async (req, res) => {
+      res.status(201).json(await notificationService.createSchedule(req.userId, req.body || {}))
+    }))
+    app.put('/api/reminders/:id', route(async (req, res) => {
+      res.json(await notificationService.updateSchedule(req.userId, req.params.id, req.body || {}))
+    }))
+    app.delete('/api/reminders/:id', route(async (req, res) => {
+      await notificationService.deleteSchedule(req.userId, req.params.id)
+      res.status(204).end()
+    }))
+  }
+
+  if (contentService) {
+    app.patch('/api/profile', route(async (req, res) => res.json(await contentService.updateProfile(req.userId, req.body || {}))))
+    app.get('/api/favorites', route(async (req, res) => res.json(await contentService.listFavorites(req.userId))))
+    app.post('/api/favorites', route(async (req, res) => {
+      res.status(201).json(await contentService.favoriteMessage(req.userId, req.body?.messageId))
+    }))
+    app.delete('/api/favorites/:id', route(async (req, res) => {
+      await contentService.deleteFavorite(req.userId, req.params.id)
+      res.status(204).end()
+    }))
+    app.get('/api/review', route(async (req, res) => {
+      res.json(await contentService.review(req.userId, { from: req.query.from, to: req.query.to, mood: req.query.mood }))
     }))
   }
 

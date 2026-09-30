@@ -28,6 +28,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: heartnest-production-maintenance
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: heartnest_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heartnest_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -39,13 +53,19 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: 测试并构建 H5
+      - name: 测试并构建全部客户端
         working-directory: app
+        env:
+          DATABASE_URL: postgres://postgres:test@127.0.0.1:5432/heartnest_test
         run: |
           npm ci
           npm test
+          npm run test:integration
+          npm run test:e2e
           npm run type-check
           npm run build:h5
+          npm run build:mp-weixin
+          npm run build:app
 
       - name: 安装 API 生产依赖
         run: npm ci --omit=dev --prefix app/server
