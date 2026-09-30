@@ -15,6 +15,13 @@ describe('mini-program component rendering', () => {
     expect(source).toContain('<OfficialUniIcons')
   })
 
+  it('does not import the SVG icon component into the WeChat build', () => {
+    const source = readSource('src/components/uni-icons/uni-icons.vue')
+
+    expect(source).toMatch(/\/\/ #ifdef MP-WEIXIN\s+import OfficialUniIcons/)
+    expect(source).toMatch(/\/\/ #ifndef MP-WEIXIN\s+import HnIcon/)
+  })
+
   it('renders primary button layout on a native button without a component style boundary', () => {
     const source = readSource('src/components/HnPrimaryButton.vue')
 

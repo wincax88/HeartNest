@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+// #ifdef MP-WEIXIN
 import OfficialUniIcons from '@dcloudio/uni-ui/lib/uni-icons/uni-icons.vue'
+// #endif
+// #ifndef MP-WEIXIN
 import HnIcon from '../HnIcon.vue'
+// #endif
 
 const props = withDefaults(defineProps<{
   type?: string
