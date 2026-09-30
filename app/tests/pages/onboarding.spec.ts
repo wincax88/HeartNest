@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OnboardingPage from '@/pages/onboarding/index.vue'
@@ -40,5 +42,14 @@ describe('onboarding page', () => {
     expect(navigateTo).toHaveBeenCalledTimes(2)
     expect(navigateTo).toHaveBeenNthCalledWith(1, { url: '/pages/consent/index' })
     expect(navigateTo).toHaveBeenNthCalledWith(2, { url: '/pages/consent/index' })
+  })
+
+  it('uses one positioned footer instead of separately positioned feature and action groups', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/pages/onboarding/index.vue'), 'utf8')
+
+    expect(source).toMatch(/\.onboarding__footer\s*\{[^}]*position:\s*absolute/s)
+    expect(source).not.toMatch(/\.feature-row\s*\{[^}]*position:\s*absolute/s)
+    expect(source).not.toMatch(/\.onboarding__actions\s*\{[^}]*position:\s*absolute/s)
+    expect(source).toContain('@media (max-height: 700px)')
   })
 })
