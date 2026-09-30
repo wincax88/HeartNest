@@ -43,7 +43,7 @@ export function createApi({ store, responder, safeResponder = null, authService 
     legacyHeaders: false,
     handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_DAILY_LIMIT', message: '今天的对话额度已用完', retryAfterSeconds: 86_400 } }),
   })
-  app.get('/api/health', (_req, res) => res.json({ ok: true }))
+  app.get('/api/health', (_req, res) => res.json({ ok: true, authMode: authService ? 'provider' : 'device' }))
   app.get('/metrics', observability.metricsHandler)
 
   if (paymentService) {

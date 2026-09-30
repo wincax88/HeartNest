@@ -45,7 +45,18 @@ foreach ($required in @('pg_restore', 'CREATE DATABASE', 'DROP DATABASE', 'lates
   if ($restoreText -notmatch [regex]::Escape($required)) { throw "Restore check is missing: $required" }
 }
 if ($apiText -notmatch 'app\.use\(helmet\(') { throw 'API security headers must be enabled through Helmet.' }
-foreach ($workflowRequirement in @('docker/build-push-action', 'heartnest-db-migrate', 'rollout undo', '/api/health', '__IMAGE__')) {
+foreach ($workflowRequirement in @(
+  'docker/build-push-action',
+  'heartnest-db-migrate',
+  'rollout undo',
+  '/api/health',
+  '__IMAGE__',
+  'WECHAT_MINI_SECRET',
+  'heartnest-postgres',
+  'POSTGRES_PASSWORD',
+  'authMode == "provider"',
+  'heartnest-web'
+)) {
   if ($workflowText -notmatch [regex]::Escape($workflowRequirement)) { throw "Deployment workflow is missing: $workflowRequirement" }
 }
 if ($dockerText -notmatch 'FROM node@sha256:') { throw 'Docker base images must be pinned by digest.' }

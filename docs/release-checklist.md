@@ -5,7 +5,7 @@
 ## 自动化基线
 
 - [x] `npm ci` 干净安装成功。
-- [x] 单元、组件、页面与服务端：23 个文件、70 项测试通过。
+- [x] 单元、组件、页面与服务端：26 个文件、82 项测试通过。
 - [x] PostgreSQL 集成：8 个文件、21 项测试通过。
 - [x] 隔离 E2E：登录同意、失败原 ID 重试、收藏、资料、提醒、支付回调通过。
 - [x] TypeScript 检查通过。
@@ -20,7 +20,7 @@
 - [ ] 在微信开发者工具用真实 AppID 验证授权、隐私同意、聊天、收藏、回顾、订阅消息与支付沙箱。
 - [ ] 在一台 Android 和一台 iOS 真机验证 App 微信登录/支付、Push 到达、键盘遮挡、焦点顺序、读屏标签、44px 点击目标和减少动效。
 - [ ] 用真实 DeepSeek Key 执行正常、敏感、危机和上游失败回归；危机请求必须在模型前旁路。
-- [ ] 配置 `GHCR_PULL_USER`、`GHCR_PULL_TOKEN`、`HEARTNEST_RUNTIME_ENV`、`BACKUP_ENCRYPTION_KEY`、微信支付/订阅/Push 凭据。
+- [ ] 配置 `GHCR_PULL_USER`、`GHCR_PULL_TOKEN`、`HEARTNEST_RUNTIME_ENV`、`WECHAT_MINI_SECRET`、`BACKUP_ENCRYPTION_KEY`、微信支付/订阅/Push 凭据。
 - [ ] 为 `heartnest-production` Environment 配置 required reviewers，并确认数据库迁移向后兼容。
 - [ ] 为 `heartnest-backups` 配置异地卷快照或对象存储复制，记录 RPO/RTO。
 
@@ -29,7 +29,7 @@
 ## 分阶段上线
 
 1. 应用 PostgreSQL 与运行密钥，执行不可变镜像中的迁移 Job；失败即停止。
-2. 按 digest 部署两个应用副本，确认 `availableReplicas=2`、PDB、HTTPS 跳转、`/api/health` 与 Prometheus 抓取。
+2. 按 digest 部署两个应用副本，先在集群内确认 `/api/health` 返回 `authMode=provider`，再切换 Ingress；公网验证失败时自动恢复旧入口。
 3. 依次启用真实微信身份、模型、支付、订阅/Push；每个阶段单独观察错误率和延迟。
 4. 手动触发首次加密备份，再触发 restore-check；只有完整性查询与清理均成功后才关闭发布窗口。
 5. 任一业务冒烟失败执行 `kubectl -n ns-i61rahoe rollout undo deployment/heartnest`；数据库只按恢复手册恢复到新实例，不覆盖原库。

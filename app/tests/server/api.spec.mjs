@@ -12,11 +12,12 @@ afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
 })
 
-async function startApi(dataFile) {
+async function startApi(dataFile, overrides = {}) {
   const store = createStore(dataFile)
   const app = createApi({
     store,
     responder: async ({ messages }) => `真实模型回复：${messages.at(-1).content}`,
+    ...overrides,
   })
   const server = createServer(app)
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -33,6 +34,17 @@ function request(base, path, options = {}) {
 }
 
 describe('HeartNest API', () => {
+  it('reports whether provider authentication is active', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'heartnest-api-health-'))
+    cleanups.push(() => rm(directory, { recursive: true, force: true }))
+
+    const deviceBase = await startApi(join(directory, 'device.json'))
+    const providerBase = await startApi(join(directory, 'provider.json'), { authService: {} })
+
+    expect(await (await fetch(`${deviceBase}/health`)).json()).toEqual({ ok: true, authMode: 'device' })
+    expect(await (await fetch(`${providerBase}/health`)).json()).toEqual({ ok: true, authMode: 'provider' })
+  })
+
   it('persists real user actions and derives stats after a restart', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'heartnest-api-'))
     cleanups.push(() => rm(directory, { recursive: true, force: true }))

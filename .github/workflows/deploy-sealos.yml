@@ -92,14 +92,20 @@ jobs:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
           GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER }}
           RUNTIME_ENV: ${{ secrets.HEARTNEST_RUNTIME_ENV }}
+          WECHAT_MINI_SECRET: ${{ secrets.WECHAT_MINI_SECRET }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
           umask 077
-          test -n "$HEARTNEST_KUBECONFIG" && test -n "$GHCR_PULL_TOKEN" && test -n "$GHCR_PULL_USER" && test -n "$RUNTIME_ENV" && test -n "$DEEPSEEK_API_KEY" && test -n "$BACKUP_ENCRYPTION_KEY"
+          test -n "$HEARTNEST_KUBECONFIG" && test -n "$GHCR_PULL_TOKEN" && test -n "$GHCR_PULL_USER" && test -n "$RUNTIME_ENV" && test -n "$WECHAT_MINI_SECRET" && test -n "$DEEPSEEK_API_KEY" && test -n "$BACKUP_ENCRYPTION_KEY"
           printf '%s' "$HEARTNEST_KUBECONFIG" > "$RUNNER_TEMP/kubeconfig"
           printf '%s' "$RUNTIME_ENV" > "$RUNNER_TEMP/runtime.env"
+          printf '\nWECHAT_MINI_SECRET=%s\n' "$WECHAT_MINI_SECRET" >> "$RUNNER_TEMP/runtime.env"
+          set -a
+          . "$RUNNER_TEMP/runtime.env"
+          set +a
+          test -n "${POSTGRES_PASSWORD:-}"
           export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
           echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
           image="${IMAGE_REPOSITORY}@${{ steps.image.outputs.digest }}"
@@ -107,6 +113,7 @@ jobs:
           backup_image="${IMAGE_REPOSITORY}-backup@${{ steps.backup_image.outputs.digest }}"
           echo "BACKUP_IMAGE=$backup_image" >> "$GITHUB_ENV"
           kubectl -n "$NAMESPACE" create secret docker-registry heartnest-registry --docker-server=ghcr.io --docker-username="$GHCR_PULL_USER" --docker-password="$GHCR_PULL_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret generic heartnest-postgres --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n "$NAMESPACE" create secret generic heartnest-runtime --from-env-file="$RUNNER_TEMP/runtime.env" --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n "$NAMESPACE" create secret generic heartnest-ai --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n "$NAMESPACE" create secret generic heartnest-backup --from-literal=BACKUP_ENCRYPTION_KEY="$BACKUP_ENCRYPTION_KEY" --dry-run=client -o yaml | kubectl apply -f -
@@ -128,13 +135,59 @@ jobs:
         run: |
           set -euo pipefail
           sed "s|__IMAGE__|$IMAGE|g" deploy/app.yaml > "$RUNNER_TEMP/app.yaml"
-          kubectl apply -f "$RUNNER_TEMP/app.yaml"
+          awk 'BEGIN { RS="---"; ORS="---\n" } $0 !~ /kind:[[:space:]]*Ingress/ { print }' "$RUNNER_TEMP/app.yaml" > "$RUNNER_TEMP/app-internal.yaml"
+          awk 'BEGIN { RS="---"; ORS="---\n" } $0 ~ /kind:[[:space:]]*Ingress/ { print }' "$RUNNER_TEMP/app.yaml" > "$RUNNER_TEMP/app-ingress.yaml"
+
+          legacy_ingress=false
+          if kubectl -n "$NAMESPACE" get ingress heartnest-web >/dev/null 2>&1; then
+            legacy_ingress=true
+            kubectl -n "$NAMESPACE" get ingress heartnest-web -o json |
+              jq 'del(.metadata.creationTimestamp, .metadata.generation, .metadata.managedFields, .metadata.resourceVersion, .metadata.uid, .status)' > "$RUNNER_TEMP/legacy-ingress.json"
+          fi
+          current_ingress=false
+          if kubectl -n "$NAMESPACE" get ingress heartnest >/dev/null 2>&1; then
+            current_ingress=true
+          fi
+
+          kubectl apply -f "$RUNNER_TEMP/app-internal.yaml"
           if ! kubectl -n "$NAMESPACE" rollout status deployment/heartnest --timeout=300s; then
-            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest
+            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest || true
             exit 1
           fi
-          if ! curl --fail --show-error --silent --retry 5 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true'; then
-            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest
-            kubectl -n "$NAMESPACE" rollout status deployment/heartnest --timeout=240s
+
+          pod="$(kubectl -n "$NAMESPACE" get pod -l app.kubernetes.io/name=heartnest -o jsonpath='{.items[0].metadata.name}')"
+          kubectl -n "$NAMESPACE" exec "$pod" -- node -e '
+            fetch("http://heartnest/api/health")
+              .then(async (response) => ({ response, body: await response.json() }))
+              .then(({ response, body }) => {
+                if (!response.ok || body.ok !== true || body.authMode !== "provider") process.exit(1)
+              })
+              .catch(() => process.exit(1))
+          '
+
+          restore_legacy_ingress() {
+            trap - ERR
+            if [ "$legacy_ingress" = true ]; then
+              kubectl -n "$NAMESPACE" delete ingress heartnest --ignore-not-found --wait=true || true
+              kubectl apply -f "$RUNNER_TEMP/legacy-ingress.json" || true
+            elif [ "$current_ingress" = false ]; then
+              kubectl -n "$NAMESPACE" delete ingress heartnest --ignore-not-found --wait=true || true
+            fi
+          }
+
+          trap restore_legacy_ingress ERR
+          if [ "$legacy_ingress" = true ]; then
+            kubectl -n "$NAMESPACE" delete ingress heartnest-web --wait=true
+          fi
+          kubectl apply -f "$RUNNER_TEMP/app-ingress.yaml"
+
+          if ! curl --fail --show-error --silent --retry 10 --retry-delay 3 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true and .authMode == "provider"'; then
+            restore_legacy_ingress
+            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest || true
             exit 1
           fi
+
+          if kubectl -n "$NAMESPACE" get deployment heartnest-web >/dev/null 2>&1; then
+            kubectl -n "$NAMESPACE" scale deployment heartnest-web --replicas=0
+          fi
+          trap - ERR

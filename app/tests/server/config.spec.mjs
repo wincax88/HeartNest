@@ -6,13 +6,27 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('DATABASE_URL')
   })
 
-  it('rejects production startup without the three requested WeChat identity channels', () => {
+  it('rejects production startup without Mini Program credentials', () => {
     expect(() => loadConfig({
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://test',
       TOKEN_SIGNING_KEY: 'x'.repeat(32),
       DATA_ENCRYPTION_KEY: 'y'.repeat(32),
     })).toThrow('WECHAT_MINI_APP_ID')
+  })
+
+  it('starts production with Mini Program credentials while App and H5 remain optional', () => {
+    const config = loadConfig({
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://test',
+      TOKEN_SIGNING_KEY: 'x'.repeat(32),
+      DATA_ENCRYPTION_KEY: 'y'.repeat(32),
+      WECHAT_MINI_APP_ID: 'mini-app',
+      WECHAT_MINI_SECRET: 'mini-secret',
+    })
+
+    expect(config.wechat.appId).toBeUndefined()
+    expect(config.wechat.h5AppId).toBeUndefined()
   })
 
   it('keeps optional platform capabilities disabled without credentials', () => {
