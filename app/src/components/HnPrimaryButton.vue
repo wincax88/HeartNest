@@ -1,15 +1,25 @@
 <script setup lang="ts">
-import HnAction from './HnAction.vue'
-withDefaults(defineProps<{ label: string; disabled?: boolean; icon?: string }>(), { disabled: false, icon: 'sound-filled' })
+const props = withDefaults(defineProps<{ label: string; disabled?: boolean; icon?: string }>(), { disabled: false, icon: 'sound-filled' })
 const emit = defineEmits<{ click: [] }>()
+
+function activate() {
+  if (!props.disabled) emit('click')
+}
 </script>
 
 <template>
-  <HnAction class="primary-button" :label="label" :disabled="disabled" @activate="emit('click')">
-    <uni-icons :type="icon" :size="26" color="#ffffff" />
-    <text>{{ label }}</text>
+  <button
+    class="primary-button"
+    type="button"
+    :disabled="props.disabled"
+    role="button"
+    :aria-label="props.label"
+    @click="activate"
+  >
+    <uni-icons :type="props.icon" :size="26" color="#ffffff" />
+    <text>{{ props.label }}</text>
     <view class="primary-button__arrow"><uni-icons type="right" :size="22" color="#ffffff" /></view>
-  </HnAction>
+  </button>
 </template>
 
 <style scoped lang="scss">
@@ -20,6 +30,7 @@ const emit = defineEmits<{ click: [] }>()
   gap: 18rpx;
   width: 100%;
   height: 104rpx;
+  margin: 0;
   padding: 0 22rpx 0 56rpx;
   border: 0;
   border-radius: 58rpx;
