@@ -12,6 +12,8 @@ import { runMigrations } from './db/migrate.mjs'
 import { createRepositories } from './db/repositories.mjs'
 import { createPrivacyService } from './privacy.mjs'
 import { createEntitlementService } from './entitlements.mjs'
+import { createPaymentService } from './payments/service.mjs'
+import { createWechatPayAdapter } from './payments/wechat.mjs'
 import { createSafeResponder } from './safety.mjs'
 import { createStore } from './store.mjs'
 
@@ -32,9 +34,13 @@ const privacyService = repositories ? createPrivacyService({
   versions: { privacyVersion: '2026-09-30', termsVersion: '2026-09-30', aiVersion: '2026-09-30' },
 }) : null
 const entitlementService = repositories ? createEntitlementService({ repositories }) : null
+const paymentService = repositories ? createPaymentService({
+  repositories,
+  adapter: createWechatPayAdapter(config.wechatPay),
+}) : null
 const responder = createDeepSeekResponder()
 const safeResponder = createSafeResponder({ responder })
-const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService })
+const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService })
 const staticRoot = resolve(process.env.HEARTNEST_STATIC_ROOT || './dist/build/h5')
 
 if (existsSync(staticRoot)) {

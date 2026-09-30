@@ -359,5 +359,85 @@ export function createRepositories(pool) {
         throw error
       })
     },
+
+    async getPaymentProduct(productId) {
+      const result = await pool.query('SELECT * FROM payment_products WHERE id = $1', [productId])
+      if (!result.rowCount) return null
+      const row = result.rows[0]
+      return { id: row.id, title: row.title, amount: row.amount, currency: row.currency, durationDays: row.duration_days, enabled: row.enabled }
+    },
+
+    async createPaymentOrder({ userId, product, merchantOrderNo }) {
+      const result = await pool.query(
+        `INSERT INTO payment_orders (user_id, product_id, merchant_order_no, amount, currency)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [userId, product.id, merchantOrderNo, product.amount, product.currency],
+      )
+      const row = result.rows[0]
+      return { id: row.id, userId: row.user_id, productId: row.product_id, merchantOrderNo: row.merchant_order_no, amount: row.amount, currency: row.currency, status: row.status }
+    },
+
+    async markPaymentOrderPending(orderId, platformPayload) {
+      const result = await pool.query(
+        `UPDATE payment_orders SET status = 'pending', platform_payload = $2::jsonb, updated_at = now()
+         WHERE id = $1 AND status = 'created' RETURNING *`,
+        [orderId, JSON.stringify(platformPayload)],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('支付订单状态无效'), { status: 409, code: 'PAYMENT_ORDER_STATE' })
+      const row = result.rows[0]
+      return { id: row.id, merchantOrderNo: row.merchant_order_no, status: row.status, amount: row.amount, currency: row.currency, platform: row.platform_payload }
+    },
+
+    async paymentOrderForUser(userId, orderId) {
+      const result = await pool.query('SELECT * FROM payment_orders WHERE id = $1 AND user_id = $2', [orderId, userId])
+      if (!result.rowCount) return null
+      const row = result.rows[0]
+      return { id: row.id, merchantOrderNo: row.merchant_order_no, status: row.status, amount: row.amount, currency: row.currency, platform: row.platform_payload, paidAt: row.paid_at?.toISOString() || null }
+    },
+
+    async completePaymentOrder({ merchantOrderNo, platformTransactionId, amount, currency }) {
+      return withTransaction(pool, async (client) => {
+        const result = await client.query(
+          `SELECT o.*, p.duration_days FROM payment_orders o
+           JOIN payment_products p ON p.id = o.product_id
+           WHERE o.merchant_order_no = $1 FOR UPDATE`,
+          [merchantOrderNo],
+        )
+        if (!result.rowCount) throw Object.assign(new Error('支付订单不存在'), { status: 404, code: 'PAYMENT_ORDER_NOT_FOUND' })
+        const order = result.rows[0]
+        if (order.amount !== amount || order.currency !== currency) {
+          throw Object.assign(new Error('支付金额不匹配'), { status: 400, code: 'PAYMENT_AMOUNT_MISMATCH' })
+        }
+        if (order.status === 'paid') return { id: order.id, status: order.status, membershipTier: 'pro' }
+        if (!['created', 'pending'].includes(order.status)) throw Object.assign(new Error('支付订单状态无效'), { status: 409, code: 'PAYMENT_ORDER_STATE' })
+
+        await client.query(
+          `UPDATE payment_orders
+           SET status = 'paid', platform_transaction_id = $2, paid_at = now(), updated_at = now()
+           WHERE id = $1`,
+          [order.id, platformTransactionId],
+        )
+        const currentMembership = await client.query('SELECT ends_at FROM memberships WHERE user_id = $1 FOR UPDATE', [order.user_id])
+        const currentEnd = currentMembership.rows[0]?.ends_at
+        const startsAt = currentEnd && currentEnd > new Date() ? currentEnd : new Date()
+        const endsAt = new Date(startsAt.getTime() + order.duration_days * 86_400_000)
+        await client.query(
+          `INSERT INTO membership_grants (user_id, payment_order_id, tier, starts_at, ends_at)
+           VALUES ($1, $2, 'pro', $3, $4)`,
+          [order.user_id, order.id, startsAt, endsAt],
+        )
+        await client.query(
+          `INSERT INTO memberships (user_id, tier, title, benefits, source, starts_at, ends_at)
+           VALUES ($1, 'pro', '心栖会员', '["无限对话","长期记忆","高级回顾"]'::jsonb, 'wechat_pay', $2, $3)
+           ON CONFLICT (user_id) DO UPDATE SET
+             tier = 'pro', title = EXCLUDED.title, benefits = EXCLUDED.benefits,
+             source = EXCLUDED.source, starts_at = EXCLUDED.starts_at, ends_at = EXCLUDED.ends_at,
+             updated_at = now()`,
+          [order.user_id, startsAt, endsAt],
+        )
+        return { id: order.id, status: 'paid', membershipTier: 'pro' }
+      })
+    },
   }
 }

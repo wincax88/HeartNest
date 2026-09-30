@@ -15,12 +15,15 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
   app.use(helmet({ contentSecurityPolicy: false }))
-  app.use(express.json({ limit: '32kb' }))
+  app.use(express.json({
+    limit: '32kb',
+    verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer) },
+  }))
   const limiterKey = (req) => req.userId || req.deviceId || ipKeyGenerator(req.ip)
   const chatMinuteLimiter = rateLimit({
     windowMs: 60_000,
@@ -39,6 +42,13 @@ export function createApi({ store, responder, safeResponder = null, authService 
     handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_DAILY_LIMIT', message: '今天的对话额度已用完', retryAfterSeconds: 86_400 } }),
   })
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
+  if (paymentService) {
+    app.post('/api/payments/wechat/callback', route(async (req, res) => {
+      await paymentService.handleWechatCallback({ headers: req.headers, rawBody: req.rawBody, body: req.body })
+      res.status(204).end()
+    }))
+  }
 
   if (authService) {
     app.post('/api/auth/provider', route(async (req, res) => {
@@ -102,6 +112,19 @@ export function createApi({ store, responder, safeResponder = null, authService 
   if (entitlementService) {
     app.get('/api/entitlements', route(async (req, res) => {
       res.json(await entitlementService.forUser(req.userId))
+    }))
+  }
+
+  if (paymentService) {
+    app.post('/api/payments/orders', route(async (req, res) => {
+      const order = await paymentService.createOrder(req.userId, req.body?.productId, {
+        clientType: req.body?.clientType,
+        openId: req.body?.openId,
+      })
+      res.status(201).json(order)
+    }))
+    app.get('/api/payments/orders/:id', route(async (req, res) => {
+      res.json(await paymentService.getOrder(req.userId, req.params.id))
     }))
   }
 
