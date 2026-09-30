@@ -18,12 +18,15 @@ function activate() {
   >
     <uni-icons :type="props.icon" :size="26" color="#ffffff" />
     <text>{{ props.label }}</text>
-    <view class="primary-button__arrow"><uni-icons type="right" :size="22" color="#ffffff" /></view>
+    <view class="primary-button__arrow">
+      <uni-icons class="primary-button__arrow-icon" type="right" :size="22" color="#ffffff" />
+    </view>
   </button>
 </template>
 
 <style scoped lang="scss">
 .primary-button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,13 +46,24 @@ function activate() {
 
 .primary-button[disabled] { opacity: 0.52; }
 .primary-button__arrow {
+  position: absolute;
+  top: 50%;
+  right: 12rpx;
   display: grid;
   place-items: center;
   width: 64rpx;
   height: 64rpx;
-  margin-left: auto;
   border: 1rpx solid rgba(255, 255, 255, 0.5);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.18);
+  transform: translateY(-50%);
+}
+
+.primary-button__arrow-icon {
+  display: block;
+  width: 44rpx;
+  height: 44rpx;
+  overflow: hidden;
+  line-height: 1;
 }
 </style>

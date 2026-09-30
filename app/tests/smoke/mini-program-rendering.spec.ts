@@ -28,4 +28,13 @@ describe('mini-program component rendering', () => {
     expect(source).not.toContain("import HnAction from './HnAction.vue'")
     expect(source).toMatch(/<button[\s\S]*class="primary-button"/)
   })
+
+  it('pins the primary button arrow inside its circle on WeChat', () => {
+    const source = readSource('src/components/HnPrimaryButton.vue')
+
+    expect(source).toContain('class="primary-button__arrow-icon"')
+    expect(source).toMatch(/\.primary-button\s*\{[^}]*position:\s*relative/s)
+    expect(source).toMatch(/\.primary-button__arrow\s*\{[^}]*position:\s*absolute[^}]*top:\s*50%[^}]*right:\s*12rpx[^}]*transform:\s*translateY\(-50%\)/s)
+    expect(source).toMatch(/\.primary-button__arrow-icon\s*\{[^}]*display:\s*block[^}]*width:\s*44rpx[^}]*height:\s*44rpx[^}]*line-height:\s*1/s)
+  })
 })

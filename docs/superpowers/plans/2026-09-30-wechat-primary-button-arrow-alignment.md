@@ -16,7 +16,7 @@
 - Modify: `app/src/components/HnPrimaryButton.vue`
 - Test: `app/tests/smoke/mini-program-rendering.spec.ts`
 
-- [ ] **Step 1: 写入失败的回归测试**
+- [x] **Step 1: 写入失败的回归测试**
 
 在 `mini-program-rendering.spec.ts` 增加：
 
@@ -31,13 +31,13 @@ it('pins the primary button arrow inside its circle on WeChat', () => {
 })
 ```
 
-- [ ] **Step 2: 运行测试并确认按预期失败**
+- [x] **Step 2: 运行测试并确认按预期失败**
 
 Run: `cd app && npm test -- tests/smoke/mini-program-rendering.spec.ts`
 
 Expected: FAIL，提示缺少 `primary-button__arrow-icon` 或定位样式。
 
-- [ ] **Step 3: 实施最小修复**
+- [x] **Step 3: 实施最小修复**
 
 将箭头图标标记为：
 
@@ -70,25 +70,25 @@ Expected: FAIL，提示缺少 `primary-button__arrow-icon` 或定位样式。
 
 删除箭头容器原有的 `margin-left: auto`，其余视觉样式保持不变。
 
-- [ ] **Step 4: 运行回归测试并确认通过**
+- [x] **Step 4: 运行回归测试并确认通过**
 
 Run: `cd app && npm test -- tests/smoke/mini-program-rendering.spec.ts`
 
 Expected: 该测试文件全部通过。
 
-- [ ] **Step 5: 构建并检查微信 WXSS**
+- [x] **Step 5: 构建并检查微信 WXSS**
 
 Run: `cd app && npm run build:mp-weixin`
 
 Expected: 构建成功，`dist/build/mp-weixin/components/HnPrimaryButton.wxss` 包含 `position:absolute`、`top:50%`、`right:12rpx` 与 `translateY(-50%)`。
 
-- [ ] **Step 6: 完整验证**
+- [x] **Step 6: 完整验证**
 
 Run: `cd app && npm test && npm run type-check && npm run build:h5 && npm run build:mp-weixin`
 
 Expected: 测试、类型检查和两个平台构建全部通过。
 
-- [ ] **Step 7: 提交实现**
+- [x] **Step 7: 提交实现**
 
 ```bash
 git add app/src/components/HnPrimaryButton.vue app/tests/smoke/mini-program-rendering.spec.ts docs/superpowers/plans/2026-09-30-wechat-primary-button-arrow-alignment.md
