@@ -16,4 +16,8 @@ describe('release manifest', () => {
   it('enables WeChat URL validation for release builds', () => {
     expect(manifest['mp-weixin'].setting.urlCheck).toBe(true)
   })
+
+  it('contains the production WeChat mini program AppID', () => {
+    expect(manifest['mp-weixin'].appid).toBe('wxf398149aa702daae')
+  })
 })

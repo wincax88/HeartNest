@@ -21,7 +21,7 @@ npm run dev:h5
 
 H5 开发服务会将 `/api` 代理到 `http://127.0.0.1:8787`。微信小程序与 App 请通过 `VITE_API_BASE_URL` 指定允许访问的 HTTPS 服务地址。
 
-发布构建不会把平台标识提交到仓库。分别设置 `HEARTNEST_WECHAT_APP_ID` 或 `HEARTNEST_APP_ID` 后运行 `npm run build:release:mp-weixin` / `npm run build:release:app`；脚本会临时注入标识、构建并在退出时恢复开发 manifest。缺少标识时发布构建会直接失败。微信小程序发布始终启用合法域名校验；App 只声明网络状态、提醒振动和保持唤醒所需权限。
+微信小程序公开 AppID `wxf398149aa702daae` 已写入 manifest，普通小程序构建可直接使用；`AppSecret` 仍只允许通过服务端 Secret 注入。若需构建其他小程序发行版，可设置 `HEARTNEST_WECHAT_APP_ID` 后运行 `npm run build:release:mp-weixin` 临时覆盖；App 发布则设置 `HEARTNEST_APP_ID` 并运行 `npm run build:release:app`。微信小程序发布始终启用合法域名校验；App 只声明网络状态、提醒振动和保持唤醒所需权限。
 
 ## 身份、隐私与数据
 
@@ -87,7 +87,7 @@ Sealos 使用 HeartNest 独享 PostgreSQL 16 StatefulSet。部署工作流先备
 - 字符图标已替换为代码内 SVG；主导航、心情单选和主要操作具有名称、选中态、键盘操作、可见焦点和至少 44px 点击区域。
 - 首页、聊天、回顾和个人页统一 loading/error/offline/empty 状态；离线聊天保留历史只读，回顾空状态提供明确下一步。
 - 回顾图表具备 7 行文本等价数据，支持系统减少动效；5 个核心 H5 路由的 axe serious/critical 违规为 0。
-- Android manifest 仅保留网络状态、提醒振动和保持唤醒权限；微信小程序启用合法域名校验，发布构建必须由环境变量注入 AppID。
+- Android manifest 仅保留网络状态、提醒振动和保持唤醒权限；微信小程序启用合法域名校验，并配置生产 AppID；其他发行版仍可通过环境变量临时覆盖。
 - 生产部署改为按 digest 的不可变镜像、两个无状态副本、零不可用滚动更新、PDB、非 root 与只读根文件系统；健康冒烟失败自动回滚。
 - API 输出脱敏 JSON 日志和 Prometheus 指标；每日 AES-256 加密备份保留 30 天，每周在隔离临时库执行自动恢复与完整性检查。
 - 最终干净回归：70 项单元/页面/服务端测试、21 项 PostgreSQL 集成测试、隔离 E2E、类型检查、三端构建、两处生产依赖审计均通过。
