@@ -4,15 +4,18 @@ import CompanionCard from '@/components/CompanionCard.vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
+import HnAsyncState from '@/components/HnAsyncState.vue'
 import MoodSelector from '@/components/MoodSelector.vue'
 import type { CompanionId, MoodId } from '@/domain/models'
 import { useAppStore } from '@/stores/app'
 import { useBootstrapStore } from '@/stores/bootstrap'
 import { useProfileStore } from '@/stores/profile'
+import { useNetworkState } from '@/composables/useNetworkState'
 
 const appStore = useAppStore()
 const bootstrapStore = useBootstrapStore()
 const profileStore = useProfileStore()
+const { online } = useNetworkState()
 const companions = computed(() => bootstrapStore.companions)
 const moods = computed(() => bootstrapStore.moods)
 const selectedMood = computed({
@@ -56,8 +59,10 @@ function navigate(destination: string) {
 
         <view class="greeting"><text>晚上好，{{ profileStore.profile.displayName }}</text><text>让情绪有处安放</text></view>
 
-        <view v-if="bootstrapStore.loading" class="data-state">正在同步你的数据…</view>
-        <view v-else-if="bootstrapStore.error" class="data-state data-state--error" @click="bootstrapStore.initialize(true)">{{ bootstrapStore.error }}，点击重试</view>
+        <HnAsyncState v-if="bootstrapStore.loading && !bootstrapStore.loaded" state="loading" title="正在同步你的数据…" />
+        <HnAsyncState v-else-if="!online && !bootstrapStore.loaded" state="offline" title="当前处于离线状态" description="联网后即可载入你的陪伴者与情绪记录。" action-label="重新检查" @action="bootstrapStore.initialize(true).catch(showError)" />
+        <HnAsyncState v-else-if="bootstrapStore.error && !bootstrapStore.loaded" state="error" :title="bootstrapStore.error" action-label="重试" @action="bootstrapStore.initialize(true).catch(showError)" />
+        <HnAsyncState v-else-if="!online" state="offline" title="正在使用已缓存内容" description="离线时可以浏览，联网后可继续同步选择。" />
 
         <HnGlassCard class="mood-panel">
           <view class="panel-title"><uni-icons type="heart-filled" :size="24" color="#ffacc8" /><text>今天，你的心情是？</text></view>
@@ -77,7 +82,7 @@ function navigate(destination: string) {
           <view><text class="insight-title">你最近夜间使用比较多</text><text class="insight-copy">或许夜晚的你，更需要一个可以安心倾诉的地方。</text></view>
         </HnGlassCard>
 
-        <HnPrimaryButton data-testid="start-chat" label="开始说话" @click="startChat" />
+        <HnPrimaryButton data-testid="start-chat" label="开始说话" :disabled="!online" @click="startChat" />
       </view>
     </scroll-view>
     <HnBottomNav active="home" @navigate="navigate" />

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
+import HnAsyncState from '@/components/HnAsyncState.vue'
 import { useReviewStore } from '@/stores/review'
 import { useBootstrapStore } from '@/stores/bootstrap'
 import { api } from '@/services/api'
@@ -31,6 +32,8 @@ function navigate(destination: string) {
   }
   uni.reLaunch({ url: routes[destination] })
 }
+
+function goHome() { uni.reLaunch({ url: '/pages/home/index' }) }
 </script>
 
 <template>
@@ -71,7 +74,7 @@ function navigate(destination: string) {
           </HnGlassCard>
         </view>
 
-        <HnGlassCard v-if="reviewStore.memories.length === 0" class="empty-card">你主动记住的对话片段会出现在这里。</HnGlassCard>
+        <HnAsyncState v-if="reviewStore.memories.length === 0" data-testid="review-empty" state="empty" title="还没有被记住的片段" description="去首页选择心情并开始一次对话。" action-label="回到首页" @action="goHome" />
 
       </view>
     </scroll-view>

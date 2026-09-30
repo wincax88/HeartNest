@@ -6,6 +6,7 @@ import ProfilePage from '@/pages/profile/index.vue'
 import SettingsPage from '@/pages/settings/index.vue'
 import MembershipPage from '@/pages/membership/index.vue'
 import { useProfileStore } from '@/stores/profile'
+import { useReviewStore } from '@/stores/review'
 
 describe('review and profile flows', () => {
   const navigateTo = vi.fn()
@@ -34,6 +35,18 @@ describe('review and profile flows', () => {
     expect(wrapper.findAll('[data-testid="review-day"]')).toHaveLength(7)
     expect(wrapper.findAll('[data-testid="memory-item"]')).toHaveLength(3)
     expect(wrapper.text()).toContain('这是你近七天的真实记录')
+  })
+
+  it('offers a next step when review memories are empty', async () => {
+    const pinia = createPinia()
+    const reLaunch = vi.fn()
+    vi.stubGlobal('uni', { navigateTo, navigateBack: vi.fn(), reLaunch, showToast: vi.fn() })
+    const wrapper = mount(ReviewPage, { global: { plugins: [pinia] } })
+    await flushPromises()
+    useReviewStore(pinia).memories = []
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-testid="review-empty"] button').trigger('click')
+    expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/home/index' })
   })
 
   it('opens settings and membership from profile', async () => {

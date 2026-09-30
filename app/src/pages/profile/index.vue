@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import HnAction from '@/components/HnAction.vue'
+import HnAsyncState from '@/components/HnAsyncState.vue'
 import { useBootstrapStore } from '@/stores/bootstrap'
 import { useProfileStore } from '@/stores/profile'
 
@@ -75,6 +76,8 @@ function navigate(destination: string) {
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="profile-scroll">
       <view class="hn-page user-page">
+        <HnAsyncState v-if="bootstrapStore.loading && !bootstrapStore.loaded" state="loading" title="正在载入个人资料…" />
+        <HnAsyncState v-else-if="bootstrapStore.error && !bootstrapStore.loaded" state="error" :title="bootstrapStore.error" action-label="重试" @action="bootstrapStore.initialize(true).catch(showError)" />
         <view class="top-row">
           <text>我的</text>
           <HnAction data-testid="open-settings" class="settings-btn" label="设置" @activate="openSettings">
