@@ -11,6 +11,7 @@ import { createPool } from './db/client.mjs'
 import { runMigrations } from './db/migrate.mjs'
 import { createRepositories } from './db/repositories.mjs'
 import { createPrivacyService } from './privacy.mjs'
+import { createEntitlementService } from './entitlements.mjs'
 import { createSafeResponder } from './safety.mjs'
 import { createStore } from './store.mjs'
 
@@ -30,9 +31,10 @@ const privacyService = repositories ? createPrivacyService({
   repositories,
   versions: { privacyVersion: '2026-09-30', termsVersion: '2026-09-30', aiVersion: '2026-09-30' },
 }) : null
+const entitlementService = repositories ? createEntitlementService({ repositories }) : null
 const responder = createDeepSeekResponder()
 const safeResponder = createSafeResponder({ responder })
-const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService })
+const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService })
 const staticRoot = resolve(process.env.HEARTNEST_STATIC_ROOT || './dist/build/h5')
 
 if (existsSync(staticRoot)) {

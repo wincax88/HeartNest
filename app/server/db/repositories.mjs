@@ -288,5 +288,76 @@ export function createRepositories(pool) {
         return mapMessage(inserted.rows[0])
       })
     },
+
+    async entitlementContext(userId, now = new Date()) {
+      const result = await pool.query(
+        `SELECT u.time_zone,
+                CASE WHEN m.tier = 'pro' AND (m.ends_at IS NULL OR m.ends_at > $2) THEN 'pro' ELSE 'free' END AS plan
+         FROM users u
+         LEFT JOIN memberships m ON m.user_id = u.id
+         WHERE u.id = $1 AND u.status = 'active'`,
+        [userId, now],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+      return { plan: result.rows[0].plan, timeZone: result.rows[0].time_zone }
+    },
+
+    async planCapabilities(plan) {
+      const result = await pool.query(
+        `SELECT capability, enabled, limit_value, period_kind
+         FROM plan_catalog WHERE plan_id = $1 ORDER BY capability`,
+        [plan],
+      )
+      return result.rows.map((row) => ({
+        capability: row.capability,
+        enabled: row.enabled,
+        limitValue: row.limit_value,
+        periodKind: row.period_kind,
+      }))
+    },
+
+    async usageForPeriod(userId, periodStart) {
+      const result = await pool.query(
+        `SELECT capability, used FROM usage_counters
+         WHERE user_id = $1 AND (period_start = $2 OR period_start = DATE '1970-01-01')`,
+        [userId, periodStart],
+      )
+      return Object.fromEntries(result.rows.map((row) => [row.capability, row.used]))
+    },
+
+    async consumeUsageQuota({ userId, capability, referenceId, periodStart, limit }) {
+      return withTransaction(pool, async (client) => {
+        const event = await client.query(
+          `INSERT INTO usage_events (user_id, capability, reference_id, period_start)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (user_id, capability, reference_id) DO NOTHING
+           RETURNING reference_id`,
+          [userId, capability, referenceId, periodStart],
+        )
+        if (!event.rowCount) {
+          const current = await client.query(
+            `SELECT used FROM usage_counters
+             WHERE user_id = $1 AND capability = $2 AND period_start = $3`,
+            [userId, capability, periodStart],
+          )
+          return current.rowCount ? { used: current.rows[0].used, replay: true } : null
+        }
+
+        const counter = await client.query(
+          `INSERT INTO usage_counters (user_id, capability, period_start, used)
+           VALUES ($1, $2, $3, 1)
+           ON CONFLICT (user_id, capability, period_start)
+           DO UPDATE SET used = usage_counters.used + 1, updated_at = now()
+           WHERE $4::integer IS NULL OR usage_counters.used < $4
+           RETURNING used`,
+          [userId, capability, periodStart, limit],
+        )
+        if (!counter.rowCount) throw Object.assign(new Error('QUOTA_EXHAUSTED'), { code: 'QUOTA_EXHAUSTED' })
+        return { used: counter.rows[0].used, replay: false }
+      }).catch((error) => {
+        if (error.code === 'QUOTA_EXHAUSTED') return null
+        throw error
+      })
+    },
   }
 }

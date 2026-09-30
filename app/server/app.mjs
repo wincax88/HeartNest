@@ -15,7 +15,7 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
@@ -99,6 +99,12 @@ export function createApi({ store, responder, safeResponder = null, authService 
     }))
   }
 
+  if (entitlementService) {
+    app.get('/api/entitlements', route(async (req, res) => {
+      res.json(await entitlementService.forUser(req.userId))
+    }))
+  }
+
   app.get('/api/bootstrap', route(async (req, res) => res.json(await store.bootstrap(req.deviceId))))
 
   app.put('/api/state', route(async (req, res) => {
@@ -156,6 +162,9 @@ export function createApi({ store, responder, safeResponder = null, authService 
     if (typeof text !== 'string' || !text.trim() || text.trim().length > 2000) throw httpError(400, 'INVALID_MESSAGE', '消息必须为 1–2000 个字符')
     if (typeof clientMessageId !== 'string' || clientMessageId.length > 100) throw httpError(400, 'INVALID_MESSAGE_ID', '消息标识无效')
     if (privacyService) await privacyService.requireCurrentConsent(req.userId)
+    const quota = entitlementService
+      ? await entitlementService.consume(req.userId, 'daily_chat', { referenceId: clientMessageId })
+      : null
 
     const context = await store.update(req.deviceId, (user) => {
       const thread = store.findThread(user, companionId)
@@ -183,7 +192,7 @@ export function createApi({ store, responder, safeResponder = null, authService 
           companionMessage = { id: randomUUID(), sender: 'companion', content: response.content, createdAt: new Date().toISOString(), status: 'sent', replyTo: clientMessageId }
           thread.messages.push(companionMessage)
         }
-        return { threadId: thread.id, userMessage, companionMessage }
+        return { threadId: thread.id, userMessage, companionMessage, quota }
       })
       res.status(201).json(result)
     } catch (error) {
