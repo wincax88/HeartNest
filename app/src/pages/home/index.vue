@@ -73,14 +73,18 @@ function navigate(destination: string) {
         <view class="hn-section-title">今天谁陪你</view>
         <scroll-view scroll-x class="companion-scroll" :show-scrollbar="false">
           <view class="companion-row">
-            <CompanionCard v-for="item in companions" :key="item.id" :data-testid="`companion-${item.id}`" :companion="item" :featured="item.id === 'mika'" @select="openCompanion(item.id)" />
+            <view v-for="item in companions" :key="item.id" class="companion-frame" data-testid="companion-frame">
+              <CompanionCard class="companion-card-host" :data-testid="`companion-${item.id}`" :companion="item" :featured="item.id === 'mika'" @select="openCompanion(item.id)" />
+            </view>
           </view>
         </scroll-view>
 
-        <HnGlassCard class="night-insight">
-          <view class="night-icon"><uni-icons type="cloud-filled" :size="32" color="#ffd2a1" /></view>
-          <view><text class="insight-title">你最近夜间使用比较多</text><text class="insight-copy">或许夜晚的你，更需要一个可以安心倾诉的地方。</text></view>
-        </HnGlassCard>
+        <view class="night-insight-frame" data-testid="night-insight-frame">
+          <HnGlassCard class="night-insight">
+            <view class="night-icon"><uni-icons type="cloud-filled" :size="32" color="#ffd2a1" /></view>
+            <view class="night-copy"><text class="insight-title">你最近夜间使用比较多</text><text class="insight-copy">或许夜晚的你，更需要一个可以安心倾诉的地方。</text></view>
+          </HnGlassCard>
+        </view>
 
         <HnPrimaryButton data-testid="start-chat" label="开始说话" :disabled="!online" @click="startChat" />
       </view>
@@ -106,10 +110,14 @@ function navigate(destination: string) {
 .panel-title { display: flex; align-items: center; gap: 13rpx; font-size: 34rpx; font-weight: 700; }
 .panel-subtitle { display: block; margin: 10rpx 0 24rpx 44rpx; color: #b8bfd9; font-size: 22rpx; }
 .companion-scroll { width: calc(100% + 36rpx); margin-right: -36rpx; }
-.companion-row { display: flex; gap: 16rpx; width: max-content; padding: 0 36rpx 10rpx 0; }
-.night-insight { display: grid; grid-template-columns: 92rpx 1fr; align-items: center; gap: 20rpx; margin: 34rpx 0; padding: 25rpx; }
+.companion-row { display: inline-flex; min-width: 100%; gap: 16rpx; padding: 0 36rpx 10rpx 0; }
+.companion-frame { flex: 0 0 260rpx; width: 260rpx; height: 360rpx; }
+.companion-card-host { display: block; width: 100%; height: 100%; }
+.night-insight-frame { display: block; width: 100%; margin: 34rpx 0; }
+.night-insight { display: grid; width: 100%; grid-template-columns: 92rpx 1fr; align-items: center; gap: 20rpx; margin: 0; padding: 25rpx; }
 .night-icon { display: grid; place-items: center; width: 84rpx; height: 84rpx; border-radius: 50%; background: rgba(106, 99, 205, 0.44); }
-.night-insight > view:last-child { display: flex; flex-direction: column; gap: 7rpx; }
+.night-copy { display: flex; min-width: 0; flex-direction: column; gap: 7rpx; }
+.insight-title, .insight-copy { display: block; white-space: normal; word-break: break-word; }
 .insight-title { font-size: 26rpx; font-weight: 700; }
 .insight-copy { color: #bcc4df; font-size: 21rpx; line-height: 1.55; }
 </style>

@@ -21,6 +21,16 @@ describe('home page', () => {
     expect(useAppStore().selectedMoodId).toBe('tired')
   })
 
+  it('renders native sizing frames around the companion and night insight regions', async () => {
+    const wrapper = mount(HomePage, { global: { plugins: [createPinia()] } })
+    await flushPromises()
+
+    const companionFrames = wrapper.findAll('[data-testid="companion-frame"]')
+    expect(companionFrames).toHaveLength(3)
+    expect(companionFrames.every(frame => frame.get('.companion-card-host').exists())).toBe(true)
+    expect(wrapper.get('[data-testid="night-insight-frame"]').classes()).toContain('night-insight-frame')
+  })
+
   it('opens Mika profile from the companion card', async () => {
     const wrapper = mount(HomePage, { global: { plugins: [createPinia()] } })
     await flushPromises()
