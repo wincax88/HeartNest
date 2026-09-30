@@ -21,9 +21,24 @@ export const apiMock = {
   deleteMemory: vi.fn(async () => undefined),
   activateTrial: vi.fn(async () => memberships.pro),
   submitFeedback: vi.fn(async () => ({ id: 'feedback-1', createdAt: new Date().toISOString() })),
+  loginWithProvider: vi.fn(async () => ({ userId: 'user-1', accessToken: 'access', refreshToken: 'refresh', expiresIn: 900 })),
+  refreshSession: vi.fn(async () => undefined),
+  logout: vi.fn(async () => undefined),
+  acceptConsent: vi.fn(async () => ({ id: 'consent-1' })),
+  createDataExport: vi.fn(async () => ({ id: 'export-1', downloadToken: 'token', expiresAt: new Date().toISOString() })),
+  requestAccountDeletion: vi.fn(async () => ({ status: 'deletion_pending', deleteAfter: new Date().toISOString() })),
+  cancelAccountDeletion: vi.fn(async () => ({ status: 'active' })),
 }
 
-vi.mock('@/services/api', () => ({ api: apiMock, ApiError: class ApiError extends Error {} }))
+vi.mock('@/services/api', () => ({
+  api: apiMock,
+  setSession: vi.fn(),
+  clearSession: vi.fn(),
+  hasStoredSession: vi.fn(() => false),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) { super(message) }
+  },
+}))
 
 afterEach(() => {
   localStorage.clear()

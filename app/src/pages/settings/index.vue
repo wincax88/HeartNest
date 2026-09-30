@@ -66,6 +66,10 @@ function openHelpFeedback() {
   })
 }
 
+function openAccount() {
+  uni.navigateTo({ url: '/pages/account/index' })
+}
+
 function goBack() {
   const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
   if (pages.length > 1) {
@@ -83,6 +87,10 @@ function goBack() {
       <view class="settings-group">
         <text class="group-title">陪伴偏好</text>
         <HnGlassCard class="settings-card">
+          <view data-testid="account-row" class="setting-row is-action" @click="openAccount">
+            <view><text>账号与隐私</text><text>导出数据、注销账号或退出登录</text></view>
+            <uni-icons type="right" :size="20" color="#9ba6c8" />
+          </view>
           <view class="setting-row">
             <view><text>温柔提醒</text><text>在你常用的夜间时段轻轻提醒</text></view>
             <view

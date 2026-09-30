@@ -1,6 +1,8 @@
 import type { AppPreferences, BootstrapData, ChatMessage, ChatThread, CompanionId, Membership, MemoryItem, MoodId } from '@/domain/models'
 
 interface ApiErrorBody { error?: { code?: string; message?: string } }
+export interface SessionResponse { userId: string; accessToken: string; refreshToken: string; expiresIn: number }
+export interface ConsentVersions { privacyVersion: string; termsVersion: string; aiVersion: string }
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -10,36 +12,64 @@ export class ApiError extends Error {
 }
 
 const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+const refreshStorageKey = 'heartnest-refresh-token'
+let accessToken = ''
+let refreshInFlight: Promise<void> | null = null
 
-function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return `hn-${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`
+function storedRefreshToken(): string {
+  const value = uni.getStorageSync(refreshStorageKey)
+  return typeof value === 'string' ? value : ''
 }
 
-function deviceId(): string {
-  const storageKey = 'heartnest-device-id'
-  const existing = uni.getStorageSync(storageKey)
-  if (typeof existing === 'string' && existing.length >= 16) return existing
-  const created = randomId()
-  uni.setStorageSync(storageKey, created)
-  return created
+export function hasStoredSession(): boolean {
+  return storedRefreshToken().length > 0
 }
 
-function request<T>(path: string, method: UniApp.RequestOptions['method'] = 'GET', data?: UniApp.RequestOptions['data']): Promise<T> {
+export function setSession(session: SessionResponse): void {
+  accessToken = session.accessToken
+  uni.setStorageSync(refreshStorageKey, session.refreshToken)
+}
+
+export function clearSession(): void {
+  accessToken = ''
+  uni.removeStorageSync(refreshStorageKey)
+}
+
+function rawRequest<T>(
+  path: string,
+  method: UniApp.RequestOptions['method'] = 'GET',
+  data?: UniApp.RequestOptions['data'],
+  options: { authenticated?: boolean; retry?: boolean } = {},
+): Promise<T> {
+  const authenticated = options.authenticated !== false
+  const retry = options.retry !== false
   return new Promise((resolve, reject) => {
+    const header: Record<string, string> = {}
+    if (authenticated && accessToken) header.Authorization = `Bearer ${accessToken}`
     uni.request({
       url: `${apiBase}${path}`,
       method,
       data,
       timeout: 35_000,
-      header: { 'X-HeartNest-Device': deviceId() },
-      success(response) {
+      header,
+      async success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300) {
           resolve(response.data as T)
           return
         }
         const body = response.data as ApiErrorBody
-        reject(new ApiError(response.statusCode, body?.error?.code ?? 'REQUEST_FAILED', body?.error?.message ?? '请求失败'))
+        const error = new ApiError(response.statusCode, body?.error?.code ?? 'REQUEST_FAILED', body?.error?.message ?? '请求失败')
+        if (authenticated && retry && response.statusCode === 401 && storedRefreshToken()) {
+          try {
+            await refreshSession()
+            resolve(await rawRequest<T>(path, method, data, { authenticated, retry: false }))
+          } catch (refreshError) {
+            clearSession()
+            reject(refreshError)
+          }
+          return
+        }
+        reject(error)
       },
       fail(error) {
         reject(new ApiError(0, 'NETWORK_ERROR', error.errMsg || '无法连接服务器'))
@@ -48,15 +78,39 @@ function request<T>(path: string, method: UniApp.RequestOptions['method'] = 'GET
   })
 }
 
+export async function refreshSession(): Promise<void> {
+  if (!refreshInFlight) {
+    refreshInFlight = rawRequest<SessionResponse>(
+      '/auth/refresh',
+      'POST',
+      { refreshToken: storedRefreshToken() },
+      { authenticated: false, retry: false },
+    ).then(setSession).finally(() => { refreshInFlight = null })
+  }
+  return refreshInFlight
+}
+
 export const api = {
-  bootstrap: () => request<BootstrapData>('/bootstrap'),
-  updateState: (patch: Partial<BootstrapData['state']>) => request<BootstrapData['state']>('/state', 'PUT', patch),
-  updatePreferences: (patch: Partial<AppPreferences>) => request<AppPreferences>('/preferences', 'PUT', patch),
-  getChat: (companionId: CompanionId) => request<ChatThread>(`/chats/${companionId}`),
+  loginWithProvider: (provider: 'wechat_mini_program' | 'wechat_app' | 'wechat_h5', code: string) =>
+    rawRequest<SessionResponse>('/auth/provider', 'POST', { provider, code }, { authenticated: false }),
+  refreshSession,
+  logout: async () => {
+    const refreshToken = storedRefreshToken()
+    if (refreshToken) await rawRequest<void>('/auth/logout', 'POST', { refreshToken }, { authenticated: false, retry: false })
+    clearSession()
+  },
+  acceptConsent: (versions: ConsentVersions) => rawRequest('/privacy/consents', 'POST', versions),
+  createDataExport: () => rawRequest<{ id: string; downloadToken: string; expiresAt: string }>('/privacy/exports', 'POST'),
+  requestAccountDeletion: () => rawRequest<{ status: string; deleteAfter: string }>('/account/deletion', 'POST'),
+  cancelAccountDeletion: () => rawRequest<{ status: string }>('/account/deletion', 'DELETE'),
+  bootstrap: () => rawRequest<BootstrapData>('/bootstrap'),
+  updateState: (patch: Partial<BootstrapData['state']>) => rawRequest<BootstrapData['state']>('/state', 'PUT', patch),
+  updatePreferences: (patch: Partial<AppPreferences>) => rawRequest<AppPreferences>('/preferences', 'PUT', patch),
+  getChat: (companionId: CompanionId) => rawRequest<ChatThread>(`/chats/${companionId}`),
   sendMessage: (companionId: CompanionId, body: { text: string; moodId: MoodId; clientMessageId: string }) =>
-    request<{ threadId: string; userMessage: ChatMessage; companionMessage: ChatMessage }>(`/chats/${companionId}/messages`, 'POST', body),
-  saveMemory: (companionId: CompanionId, messageId: string) => request<MemoryItem>('/memories', 'POST', { companionId, messageId }),
-  deleteMemory: (id: string) => request<void>(`/memories/${id}`, 'DELETE'),
-  activateTrial: () => request<Membership>('/membership/trial', 'POST'),
-  submitFeedback: (content: string) => request<{ id: string; createdAt: string }>('/feedback', 'POST', { content }),
+    rawRequest<{ threadId: string; userMessage: ChatMessage; companionMessage: ChatMessage }>(`/chats/${companionId}/messages`, 'POST', body),
+  saveMemory: (companionId: CompanionId, messageId: string) => rawRequest<MemoryItem>('/memories', 'POST', { companionId, messageId }),
+  deleteMemory: (id: string) => rawRequest<void>(`/memories/${id}`, 'DELETE'),
+  activateTrial: () => rawRequest<Membership>('/membership/trial', 'POST'),
+  submitFeedback: (content: string) => rawRequest<{ id: string; createdAt: string }>('/feedback', 'POST', { content }),
 }
