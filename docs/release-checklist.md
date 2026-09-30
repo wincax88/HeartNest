@@ -24,7 +24,15 @@
 - [ ] 为 `heartnest-production` Environment 配置 required reviewers，并确认数据库迁移向后兼容。
 - [ ] 为 `heartnest-backups` 配置异地卷快照或对象存储复制，记录 RPO/RTO。
 
-以上人工项当前为 **blocked**：仓库未提供真实平台凭据、商户证书/API v3 密钥、模板 ID、Push 服务凭据和两类真机环境。因此没有执行真实生产写入或实际切流。
+小程序身份服务已使用真实 AppID/Secret 完成生产切流；支付、订阅消息、Push、模型专项回归和两类真机验收仍为 **blocked**，不能用本次身份链路部署代替这些平台验收。
+
+## 生产部署验证
+
+- [x] GitHub Actions [运行 #36684492617](https://github.com/wincax88/HeartNest/actions/runs/36684492617) 完成测试、镜像、迁移、发布和业务冒烟。
+- [x] 公网 `/api/health` 返回 `{"ok":true,"authMode":"provider"}`。
+- [x] 无效诊断 code 返回 HTTP 401 / `PROVIDER_EXCHANGE_FAILED`，不再进入旧 `DEVICE_ID_REQUIRED` 链路。
+- [x] `deployment/heartnest` 为 2/2 可用，`deployment/heartnest-web` 已缩至 0，`statefulset/heartnest-postgres` 为 1/1 Ready。
+- [ ] 在微信开发者工具中用新鲜 `wx.login` code 完成真实登录验收。
 
 ## 分阶段上线
 

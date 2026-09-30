@@ -126,19 +126,19 @@ Run: `cd app && npm test && npm run test:integration && npm run test:e2e && npm 
 
 Expected: all commands pass.
 
-- [ ] **Step 2: Merge and push `main`**
+- [x] **Step 2: Merge and push `main`**
 
 Commit the tested changes, fast-forward `main`, rerun unit tests, and push `main` to `origin`.
 
-- [ ] **Step 3: Configure GitHub without printing secret values**
+- [x] **Step 3: Configure GitHub without printing secret values**
 
 Create the `heartnest-production` environment. Set `GHCR_PULL_USER`, `GHCR_PULL_TOKEN`, `HEARTNEST_RUNTIME_ENV`, and `BACKUP_ENCRYPTION_KEY`. The runtime environment contains `DATABASE_URL`, `POSTGRES_PASSWORD`, signing/encryption keys, and `WECHAT_MINI_APP_ID`; the existing `WECHAT_MINI_SECRET` is injected separately by the workflow.
 
-- [ ] **Step 4: Dispatch and monitor production release**
+- [x] **Step 4: Dispatch and monitor production release**
 
 Run: `gh workflow run deploy-sealos.yml -f confirm_release=true`, then watch the resulting run to completion.
 
-- [ ] **Step 5: Verify live cutover**
+- [x] **Step 5: Verify live cutover**
 
 Require all of the following:
 
