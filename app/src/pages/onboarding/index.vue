@@ -24,15 +24,28 @@ function enter() {
         <view class="onboarding__copy"><text class="onboarding__title">{{ slide.title }}</text><text class="onboarding__text">{{ slide.copy }}</text></view>
       </swiper-item>
     </swiper>
-    <view class="feature-row">
-      <view><uni-icons type="heart-filled" :size="28" color="#ffb0cc" /><text>温柔陪伴</text></view>
-      <view><uni-icons type="list" :size="28" color="#c6a3ff" /><text>情绪回顾</text></view>
-      <view><uni-icons type="star-filled" :size="28" color="#ffd29d" /><text>长期记忆</text></view>
-    </view>
-    <view class="onboarding__actions">
-      <HnPrimaryButton label="开始体验" @click="enter" />
-      <button class="look-first" @click="enter">我先看看 <uni-icons type="right" :size="17" color="#c8cee6" /></button>
-      <view class="dots"><view v-for="(_, index) in slides" :key="index" :class="{ active: index === current }" /></view>
+    <view class="onboarding__footer" data-testid="onboarding-footer">
+      <view class="feature-row" aria-label="HeartNest 核心能力">
+        <view data-testid="onboarding-feature"><uni-icons type="heart-filled" :size="26" color="#ffb0cc" /><text>温柔陪伴</text></view>
+        <view data-testid="onboarding-feature"><uni-icons type="list" :size="26" color="#c6a3ff" /><text>情绪回顾</text></view>
+        <view data-testid="onboarding-feature"><uni-icons type="star-filled" :size="26" color="#ffd29d" /><text>长期记忆</text></view>
+      </view>
+      <view class="onboarding__actions">
+        <HnPrimaryButton data-testid="onboarding-primary" label="开始体验" @click="enter" />
+        <button data-testid="onboarding-secondary" class="look-first" @click="enter">
+          我先看看 <uni-icons type="right" :size="16" color="#c8cee6" />
+        </button>
+        <view class="dots" role="tablist" aria-label="欢迎页进度">
+          <view
+            v-for="(_, index) in slides"
+            :key="index"
+            data-testid="onboarding-dot"
+            role="tab"
+            :aria-selected="index === current"
+            :class="{ active: index === current }"
+          />
+        </view>
+      </view>
     </view>
   </view>
 </template>
