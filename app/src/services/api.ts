@@ -1,4 +1,4 @@
-import type { AppPreferences, BootstrapData, ChatMessage, ChatThread, CompanionId, Membership, MemoryItem, MoodId } from '@/domain/models'
+import type { AppPreferences, BootstrapData, ChatMessage, ChatThread, CompanionId, Entitlements, FavoriteItem, Membership, MemoryItem, MoodId, PaymentOrder, ReminderSchedule, UserProfile } from '@/domain/models'
 
 interface ApiErrorBody { error?: { code?: string; message?: string } }
 export interface SessionResponse { userId: string; accessToken: string; refreshToken: string; expiresIn: number }
@@ -37,7 +37,7 @@ export function clearSession(): void {
 
 function rawRequest<T>(
   path: string,
-  method: UniApp.RequestOptions['method'] = 'GET',
+  method: UniApp.RequestOptions['method'] | 'PATCH' = 'GET',
   data?: UniApp.RequestOptions['data'],
   options: { authenticated?: boolean; retry?: boolean } = {},
 ): Promise<T> {
@@ -48,7 +48,7 @@ function rawRequest<T>(
     if (authenticated && accessToken) header.Authorization = `Bearer ${accessToken}`
     uni.request({
       url: `${apiBase}${path}`,
-      method,
+      method: method as UniApp.RequestOptions['method'],
       data,
       timeout: 35_000,
       header,
@@ -105,6 +105,17 @@ export const api = {
   cancelAccountDeletion: () => rawRequest<{ status: string }>('/account/deletion', 'DELETE'),
   favoriteMessage: (messageId: string) => rawRequest<{ id: string; targetId: string }>('/favorites', 'POST', { messageId }),
   deleteFavorite: (favoriteId: string) => rawRequest<void>(`/favorites/${favoriteId}`, 'DELETE'),
+  getFavorites: () => rawRequest<FavoriteItem[]>('/favorites'),
+  updateProfile: (profile: { displayName: string; avatarUrl?: string | null }) => rawRequest<UserProfile>('/profile', 'PATCH', profile),
+  getReview: (filters: { from: string; to: string; mood?: string }) => rawRequest<Array<{ id: string; moodId: MoodId; summary: string; recordedAt: string }>>(`/review?from=${encodeURIComponent(filters.from)}&to=${encodeURIComponent(filters.to)}${filters.mood ? `&mood=${encodeURIComponent(filters.mood)}` : ''}`),
+  getEntitlements: () => rawRequest<Entitlements>('/entitlements'),
+  createPaymentOrder: (productId: string, clientType: 'mini' | 'app' | 'h5') => rawRequest<PaymentOrder>('/payments/orders', 'POST', { productId, clientType }),
+  getPaymentOrder: (orderId: string) => rawRequest<PaymentOrder>(`/payments/orders/${orderId}`),
+  registerNotificationDevice: (input: { platform: 'app'; token: string; status?: 'active' | 'revoked' }) => rawRequest('/notifications/devices', 'POST', input),
+  authorizeNotification: (input: { channel: 'wechat'; templateId: string; subject?: string; status?: string }) => rawRequest('/notifications/authorizations', 'POST', input),
+  getReminders: () => rawRequest<ReminderSchedule[]>('/reminders'),
+  createReminder: (input: Omit<ReminderSchedule, 'id' | 'nextDeliveryAt'> & { target: Record<string, string>; payload: Record<string, unknown> }) => rawRequest<ReminderSchedule>('/reminders', 'POST', input),
+  deleteReminder: (id: string) => rawRequest<void>(`/reminders/${id}`, 'DELETE'),
   bootstrap: () => rawRequest<BootstrapData>('/bootstrap'),
   updateState: (patch: Partial<BootstrapData['state']>) => rawRequest<BootstrapData['state']>('/state', 'PUT', patch),
   updatePreferences: (patch: Partial<AppPreferences>) => rawRequest<AppPreferences>('/preferences', 'PUT', patch),

@@ -25,9 +25,7 @@ const replyStyleLabel = computed(
   () => replyStyles.find((item) => item.id === profileStore.preferences.replyStyle)?.label ?? '温柔接纳',
 )
 
-function toggleNotifications() {
-  profileStore.setNotifications(!profileStore.preferences.notificationsEnabled).catch(showError)
-}
+function openNotificationSettings() { uni.navigateTo({ url: '/pages/notification-settings/index' }) }
 
 function toggleMemoryPrompts() {
   profileStore.setMemoryPrompts(!profileStore.preferences.memoryPromptsEnabled).catch(showError)
@@ -91,14 +89,9 @@ function goBack() {
             <view><text>账号与隐私</text><text>导出数据、注销账号或退出登录</text></view>
             <uni-icons type="right" :size="20" color="#9ba6c8" />
           </view>
-          <view class="setting-row">
+          <view data-testid="notification-settings-row" class="setting-row is-action" @click="openNotificationSettings">
             <view><text>温柔提醒</text><text>在你常用的夜间时段轻轻提醒</text></view>
-            <view
-              data-testid="notification-toggle"
-              class="toggle"
-              :class="{ 'is-on': profileStore.preferences.notificationsEnabled }"
-              @click="toggleNotifications"
-            ><view /></view>
+            <uni-icons type="right" :size="20" color="#9ba6c8" />
           </view>
           <view data-testid="reply-style-row" class="setting-row is-action" @click="openReplyStylePicker">
             <view><text>回应风格</text><text>{{ replyStyleLabel }}</text></view>

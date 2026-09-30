@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import { useReviewStore } from '@/stores/review'
 import { useBootstrapStore } from '@/stores/bootstrap'
+import { api } from '@/services/api'
 
 const reviewStore = useReviewStore()
 const bootstrapStore = useBootstrapStore()
+const filterFrom = ref('2026-09-01')
+const filterTo = ref('2026-09-30')
+const filterMood = ref('')
+const filteredCount = ref<number | null>(null)
 const hasRecords = computed(() => reviewStore.reviewDays.some((day) => day.recorded))
 const heights = computed(() => reviewStore.reviewDays.map((day) => day.score ? 14 + day.score * 16 : 4))
 const dateRange = computed(() => {
@@ -14,6 +19,11 @@ const dateRange = computed(() => {
   return days.length ? `${days[0].date} — ${days.at(-1)?.date}` : '--'
 })
 onMounted(() => bootstrapStore.initialize(true).catch((error) => uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })))
+
+async function applyFilters() {
+  try { filteredCount.value = (await api.getReview({ from: filterFrom.value, to: filterTo.value, mood: filterMood.value || undefined })).length }
+  catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '筛选失败', icon: 'none' }) }
+}
 
 function navigate(destination: string) {
   const routes: Record<string, string> = {
@@ -33,6 +43,13 @@ function navigate(destination: string) {
           <view><text class="eyebrow">WEEKLY REVIEW</text><text class="title">情绪回顾</text></view>
           <view class="calendar-chip"><uni-icons type="calendar" :size="20" color="#e5d4ff" /><text>{{ dateRange }}</text></view>
         </view>
+        <view class="review-filters">
+          <picker mode="date" :value="filterFrom" @change="filterFrom = $event.detail.value"><view>从 {{ filterFrom }}</view></picker>
+          <picker mode="date" :value="filterTo" @change="filterTo = $event.detail.value"><view>到 {{ filterTo }}</view></picker>
+          <picker :range="['全部情绪', '平静', '难过']" @change="filterMood = ['', 'calm', 'sad'][$event.detail.value]"><view>{{ filterMood || '全部情绪' }}</view></picker>
+          <button data-testid="apply-review-filter" @click="applyFilters">筛选</button>
+        </view>
+        <text v-if="filteredCount !== null" class="filter-result">筛选到 {{ filteredCount }} 条情绪记录</text>
 
         <HnGlassCard class="trend-card">
           <view class="trend-copy"><text>{{ hasRecords ? '这是你近七天的真实记录' : '这一周还没有记录' }}</text><text>{{ hasRecords ? '每一次选择的情绪都会在这里留下轨迹。' : '去首页选择此刻的感受，从今天开始。' }}</text></view>
@@ -66,6 +83,7 @@ function navigate(destination: string) {
 .review-scroll { height: 100vh; }
 .review-page { padding-bottom: calc(210rpx + env(safe-area-inset-bottom)); }
 .review-header { display: flex; align-items: flex-end; justify-content: space-between; margin: 18rpx 0 38rpx; }
+.review-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; margin-bottom: 18rpx; }.review-filters view,.review-filters button { padding: 16rpx; border-radius: 18rpx; color: #cbd2e7; font-size: 19rpx; background: rgba(38,45,88,.7); }.filter-result { display:block; margin-bottom:18rpx; color:#aeb7d2; font-size:19rpx; }
 .review-header > view:first-child { display: flex; flex-direction: column; gap: 5rpx; }
 .eyebrow { color: #dc9dca; font-size: 18rpx; font-weight: 700; letter-spacing: 5rpx; }
 .title { font-family: Georgia, 'Songti SC', serif; font-size: 52rpx; font-weight: 700; }

@@ -23,6 +23,9 @@ export const useProfileStore = defineStore('profile', {
     async activateTrial() {
       this.membership = await api.activateTrial()
     },
+    async updateProfile(input: { displayName: string; avatarUrl?: string | null }) {
+      this.profile = await api.updateProfile(input)
+    },
     async setNotifications(enabled: boolean) {
       this.preferences.notificationsEnabled = enabled
       try { this.preferences = await api.updatePreferences({ notificationsEnabled: enabled }) }

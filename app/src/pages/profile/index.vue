@@ -46,6 +46,8 @@ function openMembership() {
   uni.navigateTo({ url: '/pages/membership/index' })
 }
 
+function openProfileEdit() { uni.navigateTo({ url: '/pages/profile-edit/index' }) }
+
 function openMenuItem(id: 'companions' | 'calendar' | 'favorites') {
   if (id === 'companions') {
     uni.navigateTo({ url: `/pages/companion/index?id=${profileStore.profile.preferredCompanionId}` })
@@ -55,7 +57,7 @@ function openMenuItem(id: 'companions' | 'calendar' | 'favorites') {
     uni.reLaunch({ url: '/pages/review/index' })
     return
   }
-  uni.reLaunch({ url: '/pages/review/index' })
+  uni.navigateTo({ url: '/pages/favorites/index' })
 }
 
 function navigate(destination: string) {
@@ -78,7 +80,7 @@ function navigate(destination: string) {
             <uni-icons type="gear-filled" :size="26" color="#e6e7f6" />
           </view>
         </view>
-        <view class="user-card">
+        <view data-testid="edit-profile" class="user-card" @click="openProfileEdit">
           <image :src="profileStore.profile.avatar || '/static/heartnest/mika-profile.jpg'" mode="aspectFill" />
           <view class="user-copy"><text>{{ profileStore.profile.displayName }}</text><text>连续陪伴 {{ profileStore.profile.streakDays }} 天</text></view>
           <view class="streak"><uni-icons type="fire-filled" :size="19" color="#ffd1a3" /><text>{{ profileStore.profile.streakDays }}</text></view>

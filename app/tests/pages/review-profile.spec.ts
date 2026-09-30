@@ -65,16 +65,14 @@ describe('review and profile flows', () => {
     expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/review/index' })
 
     await wrapper.get('[data-testid="menu-favorites"]').trigger('click')
-    expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/review/index' })
+    expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/favorites/index' })
   })
 
-  it('updates local notification preferences', async () => {
+  it('opens platform-backed notification settings', async () => {
     const pinia = createPinia()
     const wrapper = mount(SettingsPage, { global: { plugins: [pinia] } })
-    const profileStore = useProfileStore(pinia)
-    expect(profileStore.preferences.notificationsEnabled).toBe(true)
-    await wrapper.get('[data-testid="notification-toggle"]').trigger('click')
-    expect(profileStore.preferences.notificationsEnabled).toBe(false)
+    await wrapper.get('[data-testid="notification-settings-row"]').trigger('click')
+    expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/notification-settings/index' })
   })
 
   it('toggles memory prompts and opens settings actions', async () => {
@@ -95,13 +93,13 @@ describe('review and profile flows', () => {
     expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '帮助与反馈' }))
   })
 
-  it('activates the server-backed membership trial', async () => {
+  it('waits for a verified payment callback before granting membership', async () => {
     const pinia = createPinia()
     const wrapper = mount(MembershipPage, { global: { plugins: [pinia] } })
     const profileStore = useProfileStore(pinia)
     await wrapper.get('[data-testid="upgrade-membership"]').trigger('click')
     await flushPromises()
-    expect(profileStore.membership.tier).toBe('pro')
-    expect(wrapper.text()).toContain('已解锁心栖试用')
+    expect(profileStore.membership.tier).toBe('free')
+    expect(wrapper.text()).toContain('等待支付确认')
   })
 })
