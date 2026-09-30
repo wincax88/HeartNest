@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest'
+import { loadConfig } from '../../server/config.mjs'
+
+describe('loadConfig', () => {
+  it('rejects production startup without database and token keys', () => {
+    expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('DATABASE_URL')
+  })
+
+  it('keeps optional platform capabilities disabled without credentials', () => {
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://test',
+      TOKEN_SIGNING_KEY: 'x'.repeat(32),
+      DATA_ENCRYPTION_KEY: 'y'.repeat(32),
+    })
+
+    expect(config.features).toEqual({
+      payment: false,
+      appPush: false,
+      phoneLogin: false,
+    })
+  })
+
+  it('enables optional capabilities only when their complete credential set is present', () => {
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://test',
+      TOKEN_SIGNING_KEY: 'x'.repeat(32),
+      DATA_ENCRYPTION_KEY: 'y'.repeat(32),
+      WECHAT_PAY_MCH_ID: 'merchant',
+      WECHAT_PAY_PRIVATE_KEY: 'private-key',
+      APP_PUSH_ENDPOINT: 'https://push.example.test',
+      APP_PUSH_KEY: 'push-key',
+      SMS_ENDPOINT: 'https://sms.example.test',
+      SMS_API_KEY: 'sms-key',
+    })
+
+    expect(config.features).toEqual({
+      payment: true,
+      appPush: true,
+      phoneLogin: true,
+    })
+  })
+})
