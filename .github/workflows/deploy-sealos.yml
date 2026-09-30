@@ -8,6 +8,12 @@ on:
       - deploy/**
       - .github/workflows/deploy-sealos.yml
   workflow_dispatch:
+    inputs:
+      confirm_maintenance_window:
+        description: 已确认维护窗口及 JSON 备份策略
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,8 +24,10 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_maintenance_window == true
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: heartnest-production-maintenance
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -49,8 +57,7 @@ jobs:
           release_root="$RUNNER_TEMP/heartnest-release"
           release_dir="$release_root/$GITHUB_SHA"
           mkdir -p "$release_dir/server" "$release_dir/public"
-          cp app/server/*.mjs app/server/package.json "$release_dir/server/"
-          cp -a app/server/node_modules "$release_dir/server/"
+          cp -a app/server/. "$release_dir/server/"
           cp -a app/dist/build/h5/. "$release_dir/public/"
           tar -czf "$RUNNER_TEMP/heartnest-release-$GITHUB_SHA.tgz" -C "$release_root" "$GITHUB_SHA"
 
@@ -64,13 +71,46 @@ jobs:
         env:
           HEARTNEST_KUBECONFIG: ${{ secrets.HEARTNEST_KUBECONFIG }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          HEARTNEST_POSTGRES_PASSWORD: ${{ secrets.HEARTNEST_POSTGRES_PASSWORD }}
+          TOKEN_SIGNING_KEY: ${{ secrets.TOKEN_SIGNING_KEY }}
+          DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
+          WECHAT_MINI_APP_ID: ${{ secrets.WECHAT_MINI_APP_ID }}
+          WECHAT_MINI_SECRET: ${{ secrets.WECHAT_MINI_SECRET }}
+          WECHAT_APP_ID: ${{ secrets.WECHAT_APP_ID }}
+          WECHAT_APP_SECRET: ${{ secrets.WECHAT_APP_SECRET }}
+          WECHAT_H5_APP_ID: ${{ secrets.WECHAT_H5_APP_ID }}
+          WECHAT_H5_SECRET: ${{ secrets.WECHAT_H5_SECRET }}
+          RUNTIME_ENV_FILE: ${{ runner.temp }}/heartnest-runtime.env
+          POSTGRES_ENV_FILE: ${{ runner.temp }}/heartnest-postgres.env
         run: |
           set -euo pipefail
-          if [[ -z "$HEARTNEST_KUBECONFIG" || -z "$DEEPSEEK_API_KEY" ]]; then
-            echo '缺少 HEARTNEST_KUBECONFIG 或 DEEPSEEK_API_KEY 仓库 Secret。' >&2
-            exit 1
-          fi
           umask 077
+          node <<'NODE'
+          const fs = require('node:fs')
+          const required = [
+            'HEARTNEST_KUBECONFIG', 'DEEPSEEK_API_KEY', 'HEARTNEST_POSTGRES_PASSWORD',
+            'TOKEN_SIGNING_KEY', 'DATA_ENCRYPTION_KEY', 'WECHAT_MINI_APP_ID',
+            'WECHAT_MINI_SECRET', 'WECHAT_APP_ID', 'WECHAT_APP_SECRET',
+            'WECHAT_H5_APP_ID', 'WECHAT_H5_SECRET',
+          ]
+          const missing = required.filter((name) => !process.env[name])
+          if (missing.length) throw new Error(`缺少仓库 Secret: ${missing.join(', ')}`)
+          const databaseUrl = `postgres://heartnest_app:${encodeURIComponent(process.env.HEARTNEST_POSTGRES_PASSWORD)}@heartnest-postgres:5432/heartnest`
+          const runtime = {
+            DATABASE_URL: databaseUrl,
+            TOKEN_SIGNING_KEY: process.env.TOKEN_SIGNING_KEY,
+            DATA_ENCRYPTION_KEY: process.env.DATA_ENCRYPTION_KEY,
+            WECHAT_MINI_APP_ID: process.env.WECHAT_MINI_APP_ID,
+            WECHAT_MINI_SECRET: process.env.WECHAT_MINI_SECRET,
+            WECHAT_APP_ID: process.env.WECHAT_APP_ID,
+            WECHAT_APP_SECRET: process.env.WECHAT_APP_SECRET,
+            WECHAT_H5_APP_ID: process.env.WECHAT_H5_APP_ID,
+            WECHAT_H5_SECRET: process.env.WECHAT_H5_SECRET,
+          }
+          const encode = (value) => String(value).replace(/\\/g, '\\\\').replace(/\n/g, '\\n')
+          fs.writeFileSync(process.env.RUNTIME_ENV_FILE, Object.entries(runtime).map(([key, value]) => `${key}=${encode(value)}`).join('\n'))
+          fs.writeFileSync(process.env.POSTGRES_ENV_FILE, `POSTGRES_PASSWORD=${encode(process.env.HEARTNEST_POSTGRES_PASSWORD)}\n`)
+          NODE
           printf '%s' "$HEARTNEST_KUBECONFIG" > "$RUNNER_TEMP/heartnest-kubeconfig"
           printf '%s' "$DEEPSEEK_API_KEY" > "$RUNNER_TEMP/heartnest-deepseek-key"
           printf 'KUBECONFIG=%s\n' "$RUNNER_TEMP/heartnest-kubeconfig" >> "$GITHUB_ENV"
@@ -85,13 +125,26 @@ jobs:
           [[ "$api_server" == 'https://gzg.sealos.run:6443' ]] || { echo 'kubeconfig 集群地址不匹配。' >&2; exit 1; }
           kubectl -n ns-i61rahoe get pvc heartnest-web
 
-      - name: 更新 DeepSeek 集群密钥
+      - name: 更新集群密钥
         shell: bash
         run: |
           set -euo pipefail
           kubectl -n ns-i61rahoe create secret generic heartnest-ai \
             --from-file=DEEPSEEK_API_KEY="$RUNNER_TEMP/heartnest-deepseek-key" \
             --dry-run=client -o yaml | kubectl -n ns-i61rahoe apply -f -
+          kubectl -n ns-i61rahoe create secret generic heartnest-postgres \
+            --from-env-file="$RUNNER_TEMP/heartnest-postgres.env" \
+            --dry-run=client -o yaml | kubectl -n ns-i61rahoe apply -f -
+          kubectl -n ns-i61rahoe create secret generic heartnest-runtime \
+            --from-env-file="$RUNNER_TEMP/heartnest-runtime.env" \
+            --dry-run=client -o yaml | kubectl -n ns-i61rahoe apply -f -
+
+      - name: 启动 HeartNest 专用 PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl -n ns-i61rahoe apply -f deploy/postgres.yaml
+          kubectl -n ns-i61rahoe rollout status statefulset/heartnest-postgres --timeout=240s
 
       - name: 上传版本到现有 PVC
         shell: bash
@@ -115,6 +168,37 @@ jobs:
             rm "/site/heartnest-release-$GITHUB_SHA.tgz"
           kubectl -n ns-i61rahoe exec heartnest-actions-uploader -- \
             test -f "/site/releases/$GITHUB_SHA/server/index.mjs"
+
+      - name: 备份旧 JSON 数据
+        shell: bash
+        run: |
+          set -euo pipefail
+          backup_name="heartnest-json-backup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          kubectl -n ns-i61rahoe exec heartnest-actions-uploader -- sh -ec \
+            "mkdir -p /site/backups; if [ -f /site/data/heartnest.json ]; then cp -p /site/data/heartnest.json /site/backups/$backup_name; fi"
+          printf 'Backup retained on heartnest-web PVC: /site/backups/%s\nRelease: %s\n' \
+            "$backup_name" "$GITHUB_SHA" > "$RUNNER_TEMP/heartnest-rollback-manifest.txt"
+
+      - name: Dry-run、迁移并核验旧数据
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed "s/__RELEASE_SHA__/$GITHUB_SHA/g" deploy/migrate-job.yaml > "$RUNNER_TEMP/heartnest-migrate-job.yaml"
+          kubectl -n ns-i61rahoe delete job heartnest-db-migrate --ignore-not-found --wait=true
+          kubectl -n ns-i61rahoe apply -f "$RUNNER_TEMP/heartnest-migrate-job.yaml"
+          kubectl -n ns-i61rahoe wait --for=condition=Complete job/heartnest-db-migrate --timeout=300s || {
+            kubectl -n ns-i61rahoe logs job/heartnest-db-migrate
+            exit 1
+          }
+
+      - name: 保留回滚产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: heartnest-rollback-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/heartnest-release-${{ github.sha }}.tgz
+            ${{ runner.temp }}/heartnest-rollback-manifest.txt
+          retention-days: 14
 
       - name: 切换到新版本
         shell: bash
