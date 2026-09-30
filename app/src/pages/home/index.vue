@@ -80,9 +80,11 @@ function navigate(destination: string) {
         </scroll-view>
 
         <view class="night-insight-frame" data-testid="night-insight-frame">
-          <HnGlassCard class="night-insight">
-            <view class="night-icon"><uni-icons type="cloud-filled" :size="32" color="#ffd2a1" /></view>
-            <view class="night-copy"><text class="insight-title">你最近夜间使用比较多</text><text class="insight-copy">或许夜晚的你，更需要一个可以安心倾诉的地方。</text></view>
+          <HnGlassCard class="night-insight-card" fill>
+            <view class="night-insight-layout">
+              <view class="night-icon"><uni-icons type="cloud-filled" :size="32" color="#ffd2a1" /></view>
+              <view class="night-copy"><text class="insight-title">你最近夜间使用比较多</text><text class="insight-copy">或许夜晚的你，更需要一个可以安心倾诉的地方。</text></view>
+            </view>
           </HnGlassCard>
         </view>
 
@@ -114,7 +116,8 @@ function navigate(destination: string) {
 .companion-frame { flex: 0 0 260rpx; width: 260rpx; height: 360rpx; }
 .companion-card-host { display: block; width: 100%; height: 100%; }
 .night-insight-frame { display: block; width: 100%; margin: 34rpx 0; }
-.night-insight { display: grid; width: 100%; grid-template-columns: 92rpx 1fr; align-items: center; gap: 20rpx; margin: 0; padding: 25rpx; }
+.night-insight-card { display: block; width: 100%; margin: 0; }
+.night-insight-layout { display: grid; box-sizing: border-box; width: 100%; grid-template-columns: 92rpx 1fr; align-items: center; gap: 20rpx; padding: 25rpx; }
 .night-icon { display: grid; place-items: center; width: 84rpx; height: 84rpx; border-radius: 50%; background: rgba(106, 99, 205, 0.44); }
 .night-copy { display: flex; min-width: 0; flex-direction: column; gap: 7rpx; }
 .insight-title, .insight-copy { display: block; white-space: normal; word-break: break-word; }

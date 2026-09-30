@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import type { Companion } from '@/domain/models'
-import HnAction from './HnAction.vue'
 
 defineProps<{ companion: Companion; featured?: boolean }>()
 const emit = defineEmits<{ select: [] }>()
 </script>
 
 <template>
-  <HnAction :label="`选择陪伴者 ${companion.chineseName}`" class="companion-card" :class="{ 'is-featured': featured }" @activate="emit('select')">
+  <button type="button" role="button" :aria-label="`选择陪伴者 ${companion.chineseName}`" class="companion-card" :class="{ 'is-featured': featured }" @click="emit('select')">
     <image class="companion-card__image" :src="companion.cardImage" mode="aspectFill" />
     <view class="companion-card__shade" />
     <view v-if="featured" class="companion-card__badge"><uni-icons type="star-filled" :size="14" color="#5d3c62" /> 为你推荐</view>
@@ -16,11 +15,12 @@ const emit = defineEmits<{ select: [] }>()
       <text class="companion-card__tagline">「{{ companion.tagline }}」</text>
       <view class="companion-card__traits"><text v-for="trait in companion.traits.slice(0, 2)" :key="trait">{{ trait }}</text></view>
     </view>
-  </HnAction>
+  </button>
 </template>
 
 <style scoped lang="scss">
-.companion-card { position: relative; display: block; width: 100%; min-width: 0; height: 100%; padding: 0; overflow: hidden; border: 1rpx solid rgba(176, 190, 255, 0.28); border-radius: 30rpx; color: #fff; text-align: left; background: #111d42; box-shadow: 0 18rpx 44rpx rgba(1, 6, 22, 0.38); }
+.companion-card { position: relative; display: block; box-sizing: border-box; width: 100%; min-width: 0; height: 100%; margin: 0; padding: 0; overflow: hidden; border: 1rpx solid rgba(176, 190, 255, 0.28); border-radius: 30rpx; color: #fff; font: inherit; line-height: normal; text-align: left; background: #111d42; box-shadow: 0 18rpx 44rpx rgba(1, 6, 22, 0.38); }
+.companion-card::after { border: 0; }
 .companion-card.is-featured { border: 3rpx solid #ff9abf; box-shadow: 0 0 32rpx rgba(240, 127, 185, 0.46); }
 .companion-card__image, .companion-card__shade { position: absolute; inset: 0; width: 100%; height: 100%; }
 .companion-card__shade { background: linear-gradient(180deg, transparent 32%, rgba(5, 10, 31, 0.9) 90%); }

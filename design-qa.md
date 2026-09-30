@@ -1,61 +1,51 @@
-# Home Layout Design QA
+# Home Mini Program Layout QA
 
 **Source visual truth path**
 
-- `C:\Users\Admin\AppData\Local\Temp\codex-clipboard-56ecbb38-5d93-4bf2-b56e-cdbfd04629ff.png`
-- Focused defect evidence: `C:\Users\Admin\AppData\Local\Temp\codex-clipboard-dc4ead6f-8176-4441-bc54-08d43cd3a955.png`
+- Intended layout reference: `C:\Users\Admin\AppData\Local\Temp\codex-clipboard-56ecbb38-5d93-4bf2-b56e-cdbfd04629ff.png`
+- Latest WeChat defect evidence: `C:\Users\Admin\AppData\Local\Temp\codex-clipboard-5f147e2d-8572-4fa2-b70a-ff2d3fc95cb8.png`
 
-**Implementation screenshot path**
+**Implementation evidence**
 
-- `C:\github\HeartNest\app\artifacts\visual-qa\home-layout-fixed.png`
-- Combined comparison: `C:\github\HeartNest\app\artifacts\visual-qa\home-layout-comparison.png`
+- Generated component: `C:\github\HeartNest\.worktrees\fix-mini-component-fill\app\dist\build\mp-weixin\components\CompanionCard.wxml`
+- Generated glass component: `C:\github\HeartNest\.worktrees\fix-mini-component-fill\app\dist\build\mp-weixin\components\HnGlassCard.wxml`
+- Generated home page: `C:\github\HeartNest\.worktrees\fix-mini-component-fill\app\dist\build\mp-weixin\pages\home\index.wxml`
 
-**Viewport and normalization**
+**Viewport and state**
 
-- Source: 406 × 810 pixels, supplied WeChat Mini Program device capture.
-- Implementation: 390 × 844 pixels at a 390 × 844 CSS viewport and device scale factor 1.
-- Comparison: both full mobile views were placed on one canvas at their native pixel density. The source includes WeChat device chrome; the implementation capture is content-only. This platform chrome difference was excluded from findings.
+- Latest defect capture: WeChat DevTools iPhone 12/13 simulator, home page with companions loaded.
+- A post-fix native WeChat screenshot is not available because native-app capture is disabled in the current execution environment.
 
-**State**
+## Findings and comparison history
 
-- Home page with all three companions loaded from the local development API.
-- Default mood selected, Mika featured, night insight visible, bottom navigation visible.
-
-## Full-view comparison evidence
-
-The combined comparison shows the preserved night/glass visual direction, unchanged information hierarchy, and restored vertical rhythm. The repaired implementation no longer leaves a large empty region between “今天谁陪你” and the primary action.
-
-## Focused region comparison evidence
-
-- Companion region: all three companion cards render at a consistent readable width and height. Images, names, recommendation badge, and trait chips are horizontally legible; no card collapses to the custom button's minimum width.
-- Night insight: the card spans the content width, the icon stays in its fixed column, and both text lines flow horizontally with normal wrapping.
+1. The first repair added native frames around the custom components. The latest WeChat screenshot proved that only the hosts expanded: the nested `HnAction` button still collapsed vertically, and the night insight still laid out across a custom-component boundary.
+2. Root cause evidence: generated `CompanionCard.wxml` nested an `hn-action` custom component whose internal button only had a 44px minimum size. The night grid was applied to the `HnGlassCard` host rather than to native content inside its slot.
+3. Fix applied:
+   - `CompanionCard` now renders a native `button` as its root, so its image, overlay, and copy share the fixed 260rpx × 360rpx layout context.
+   - `HnGlassCard` now supports a fill mode on its internal root.
+   - The night insight grid now lives inside a native `view` within the glass card slot.
+4. Post-fix generated WXML verification:
+   - `CompanionCard.wxml` contains a native root `button` and no nested `hn-action`.
+   - `HnGlassCard.wxml` applies `is-fill` to its internal root.
+   - Home WXML contains `night-insight-layout`, and its WXSS contains the native grid rule.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: existing families, weights, sizes, hierarchy, and Chinese line wrapping are preserved. The repaired copy remains horizontal and readable.
-- Spacing and layout rhythm: card dimensions, horizontal gaps, full-width insight alignment, radii, shadows, and section gaps match the established page system.
-- Colors and visual tokens: the navy glass surfaces, pink-purple accents, warm recommendation badge, and foreground contrast are unchanged.
-- Image quality and asset fidelity: the existing companion and night background assets are preserved, with no substitutions or generated approximations.
-- Copy and content: all visible product copy is unchanged.
+- Fonts and typography: product type sizes and hierarchy remain unchanged; generated structure now permits horizontal wrapping.
+- Spacing and layout rhythm: fixed companion frames and full-width night frame remain unchanged.
+- Colors and visual tokens: existing gradients, glass colors, borders, shadows, and accent colors remain unchanged.
+- Image quality and asset fidelity: existing companion and night assets are unchanged.
+- Copy and content: all product copy remains unchanged.
 
-## Comparison history
+## Verification completed
 
-1. Initial evidence contained two P1 layout failures: companion cards collapsed into narrow strips, and the night insight collapsed into a narrow vertical text column.
-2. Fix applied: native `view` sizing frames were introduced; each companion host fills a fixed non-shrinking frame; the insight fills a full-width frame with a flexible `min-width: 0` text column; `max-content` was removed.
-3. Post-fix evidence: `home-layout-fixed.png` and `home-layout-comparison.png` show both regions readable at the target mobile viewport. No actionable P0, P1, or P2 mismatch remains.
+- 86 automated tests passed.
+- Type checking passed.
+- H5, App, and WeChat Mini Program builds passed.
+- Generated Mini Program WXML/WXSS structural assertions passed.
 
-## Interaction and runtime checks
+## Blocker
 
-- Companion card click navigated to `#/pages/companion/index?id=mika` and browser back restored the home state.
-- Browser console warnings/errors after the interaction: none.
-- Automated page behavior and layout regression tests: passed.
+- A fresh screenshot from WeChat DevTools after recompiling the new `dist/build/mp-weixin` output is required for final visual confirmation.
 
-## Findings
-
-- No actionable P0, P1, or P2 findings remain.
-
-## Follow-up polish
-
-- None required for this focused repair.
-
-final result: passed
+final result: blocked

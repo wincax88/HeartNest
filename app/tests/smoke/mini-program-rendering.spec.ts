@@ -29,6 +29,23 @@ describe('mini-program component rendering', () => {
     expect(source).toMatch(/<button[\s\S]*class="primary-button"/)
   })
 
+  it('renders companion card layout on a native button without a nested action boundary', () => {
+    const source = readSource('src/components/CompanionCard.vue')
+
+    expect(source).not.toContain("import HnAction from './HnAction.vue'")
+    expect(source).toMatch(/<button[\s\S]*class="companion-card"/)
+  })
+
+  it('keeps night insight layout inside a fillable glass-card root', () => {
+    const home = readSource('src/pages/home/index.vue')
+    const glassCard = readSource('src/components/HnGlassCard.vue')
+
+    expect(home).toContain('<HnGlassCard class="night-insight-card" fill>')
+    expect(home).toContain('<view class="night-insight-layout">')
+    expect(glassCard).toMatch(/defineProps<\{\s*fill\?: boolean\s*\}>/)
+    expect(glassCard).toMatch(/\.glass-card\.is-fill\s*\{[^}]*width:\s*100%/s)
+  })
+
   it('pins the primary button arrow inside its circle on WeChat', () => {
     const source = readSource('src/components/HnPrimaryButton.vue')
 
