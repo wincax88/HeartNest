@@ -15,7 +15,7 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
@@ -46,6 +46,26 @@ export function createApi({ store, responder, safeResponder = null, authService 
   if (paymentService) {
     app.post('/api/payments/wechat/callback', route(async (req, res) => {
       await paymentService.handleWechatCallback({ headers: req.headers, rawBody: req.rawBody, body: req.body })
+      res.status(204).end()
+    }))
+  }
+
+  if (notificationService) {
+    app.post('/api/notifications/devices', route(async (req, res) => {
+      res.status(201).json(await notificationService.registerDevice(req.userId, req.body || {}))
+    }))
+    app.post('/api/notifications/authorizations', route(async (req, res) => {
+      res.status(201).json(await notificationService.authorizeTemplate(req.userId, req.body || {}))
+    }))
+    app.get('/api/reminders', route(async (req, res) => res.json(await notificationService.listSchedules(req.userId))))
+    app.post('/api/reminders', route(async (req, res) => {
+      res.status(201).json(await notificationService.createSchedule(req.userId, req.body || {}))
+    }))
+    app.put('/api/reminders/:id', route(async (req, res) => {
+      res.json(await notificationService.updateSchedule(req.userId, req.params.id, req.body || {}))
+    }))
+    app.delete('/api/reminders/:id', route(async (req, res) => {
+      await notificationService.deleteSchedule(req.userId, req.params.id)
       res.status(204).end()
     }))
   }

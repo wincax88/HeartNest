@@ -14,6 +14,10 @@ import { createPrivacyService } from './privacy.mjs'
 import { createEntitlementService } from './entitlements.mjs'
 import { createPaymentService } from './payments/service.mjs'
 import { createWechatPayAdapter } from './payments/wechat.mjs'
+import { createNotificationService } from './notifications/service.mjs'
+import { createNotificationWorker } from './notifications/worker.mjs'
+import { createWechatNotificationAdapter } from './notifications/wechat.mjs'
+import { createAppPushAdapter } from './notifications/app-push.mjs'
 import { createSafeResponder } from './safety.mjs'
 import { createStore } from './store.mjs'
 
@@ -38,10 +42,25 @@ const paymentService = repositories ? createPaymentService({
   repositories,
   adapter: createWechatPayAdapter(config.wechatPay),
 }) : null
+const notificationService = repositories ? createNotificationService({ repositories }) : null
+const notificationWorker = repositories ? createNotificationWorker({
+  repositories,
+  adapters: {
+    wechat: createWechatNotificationAdapter({ appId: config.wechat.miniAppId, appSecret: config.wechat.miniSecret }),
+    app: createAppPushAdapter(config.appPush),
+  },
+}) : null
 const responder = createDeepSeekResponder()
 const safeResponder = createSafeResponder({ responder })
-const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService })
+const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService })
 const staticRoot = resolve(process.env.HEARTNEST_STATIC_ROOT || './dist/build/h5')
+
+if (notificationWorker) {
+  const notificationTimer = setInterval(() => {
+    notificationWorker.runBatch().catch((error) => console.error('Notification worker failed:', error.message))
+  }, 30_000)
+  notificationTimer.unref()
+}
 
 if (existsSync(staticRoot)) {
   app.use(express.static(staticRoot, { index: 'index.html', maxAge: '1h' }))

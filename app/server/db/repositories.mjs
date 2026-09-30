@@ -439,5 +439,146 @@ export function createRepositories(pool) {
         return { id: order.id, status: 'paid', membershipTier: 'pro' }
       })
     },
+
+    async upsertNotificationDevice(userId, { platform, token, status = 'active' }) {
+      const result = await pool.query(
+        `INSERT INTO notification_devices (user_id, platform, token, status)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, platform, token) DO UPDATE SET status = EXCLUDED.status, updated_at = now()
+         RETURNING id, platform, status`,
+        [userId, platform, token, status],
+      )
+      return result.rows[0]
+    },
+
+    async upsertNotificationAuthorization(userId, { channel, templateId, subject = null, status = 'authorized' }) {
+      const result = await pool.query(
+        `INSERT INTO notification_authorizations (user_id, channel, template_id, subject, status)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id, channel, template_id) DO UPDATE SET subject = EXCLUDED.subject, status = EXCLUDED.status, updated_at = now()
+         RETURNING channel, template_id, status`,
+        [userId, channel, templateId, subject, status],
+      )
+      return { channel: result.rows[0].channel, templateId: result.rows[0].template_id, status: result.rows[0].status }
+    },
+
+    async notificationTargetAuthorized(userId, channel, target) {
+      if (channel === 'wechat') {
+        const result = await pool.query(
+          `SELECT 1 FROM notification_authorizations
+           WHERE user_id = $1 AND channel = 'wechat' AND template_id = $2 AND status = 'authorized'`,
+          [userId, target.templateId],
+        )
+        return result.rowCount === 1
+      }
+      if (channel === 'app') {
+        const result = await pool.query(
+          `SELECT 1 FROM notification_devices
+           WHERE user_id = $1 AND platform = 'app' AND token = $2 AND status = 'active'`,
+          [userId, target.token],
+        )
+        return result.rowCount === 1
+      }
+      return false
+    },
+
+    async listReminderSchedules(userId) {
+      const result = await pool.query('SELECT * FROM reminder_schedules WHERE user_id = $1 ORDER BY created_at', [userId])
+      return result.rows.map((row) => ({
+        id: row.id, channel: row.channel, time: row.reminder_time.slice(0, 5), timeZone: row.time_zone,
+        quietStart: row.quiet_start.slice(0, 5), quietEnd: row.quiet_end.slice(0, 5), enabled: row.enabled,
+        payload: row.payload, target: row.target, nextDeliveryAt: row.next_delivery_at.toISOString(),
+      }))
+    },
+
+    async createReminderSchedule(userId, input) {
+      const result = await pool.query(
+        `INSERT INTO reminder_schedules
+           (user_id, channel, reminder_time, time_zone, quiet_start, quiet_end, payload, target, enabled, next_delivery_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)
+         RETURNING id`,
+        [userId, input.channel, input.time, input.timeZone, input.quietStart, input.quietEnd, JSON.stringify(input.payload || {}), JSON.stringify(input.target || {}), input.enabled !== false, input.nextDeliveryAt],
+      )
+      return (await this.listReminderSchedules(userId)).find((item) => item.id === result.rows[0].id)
+    },
+
+    async updateReminderSchedule(userId, scheduleId, input) {
+      const result = await pool.query(
+        `UPDATE reminder_schedules SET
+           channel = $3, reminder_time = $4, time_zone = $5, quiet_start = $6, quiet_end = $7,
+           payload = $8::jsonb, target = $9::jsonb, enabled = $10, next_delivery_at = $11, updated_at = now()
+         WHERE id = $1 AND user_id = $2 RETURNING id`,
+        [scheduleId, userId, input.channel, input.time, input.timeZone, input.quietStart, input.quietEnd, JSON.stringify(input.payload || {}), JSON.stringify(input.target || {}), input.enabled !== false, input.nextDeliveryAt],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('提醒计划不存在'), { status: 404, code: 'REMINDER_NOT_FOUND' })
+      return (await this.listReminderSchedules(userId)).find((item) => item.id === scheduleId)
+    },
+
+    async deleteReminderSchedule(userId, scheduleId) {
+      const result = await pool.query('DELETE FROM reminder_schedules WHERE id = $1 AND user_id = $2', [scheduleId, userId])
+      if (!result.rowCount) throw Object.assign(new Error('提醒计划不存在'), { status: 404, code: 'REMINDER_NOT_FOUND' })
+    },
+
+    async enqueueDueReminderJobs(now = new Date()) {
+      return withTransaction(pool, async (client) => {
+        const due = await client.query(
+          `SELECT * FROM reminder_schedules
+           WHERE enabled = true AND next_delivery_at <= $1
+           ORDER BY next_delivery_at FOR UPDATE SKIP LOCKED LIMIT 100`,
+          [now],
+        )
+        for (const row of due.rows) {
+          await client.query(
+            `INSERT INTO notification_jobs
+               (schedule_id, user_id, channel, payload, target, scheduled_for, next_attempt_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $6)
+             ON CONFLICT (schedule_id, scheduled_for) DO NOTHING`,
+            [row.id, row.user_id, row.channel, row.payload, row.target, row.next_delivery_at],
+          )
+          await client.query('UPDATE reminder_schedules SET next_delivery_at = next_delivery_at + interval \'1 day\', updated_at = now() WHERE id = $1', [row.id])
+        }
+        return due.rowCount
+      })
+    },
+
+    async claimNotificationJobs(limit = 20, now = new Date()) {
+      return withTransaction(pool, async (client) => {
+        const result = await client.query(
+          `WITH due AS (
+             SELECT id FROM notification_jobs
+             WHERE status = 'pending' AND next_attempt_at <= $1
+             ORDER BY next_attempt_at FOR UPDATE SKIP LOCKED LIMIT $2
+           )
+           UPDATE notification_jobs j
+           SET status = 'processing', attempts = attempts + 1, updated_at = now()
+           FROM due WHERE j.id = due.id
+           RETURNING j.*`,
+          [now, limit],
+        )
+        return result.rows.map((row) => ({ id: row.id, channel: row.channel, attempts: row.attempts, payload: row.payload, target: row.target }))
+      })
+    },
+
+    async markNotificationDelivered(jobId) {
+      await pool.query("UPDATE notification_jobs SET status = 'delivered', delivered_at = now(), updated_at = now() WHERE id = $1", [jobId])
+    },
+
+    async retryNotificationJob(jobId, nextAttemptAt, errorMessage) {
+      await pool.query(
+        "UPDATE notification_jobs SET status = 'pending', next_attempt_at = $2, last_error = $3, updated_at = now() WHERE id = $1",
+        [jobId, nextAttemptAt, errorMessage.slice(0, 500)],
+      )
+    },
+
+    async deadLetterNotificationJob(jobId, errorMessage) {
+      await withTransaction(pool, async (client) => {
+        await client.query("UPDATE notification_jobs SET status = 'dead', last_error = $2, updated_at = now() WHERE id = $1", [jobId, errorMessage.slice(0, 500)])
+        await client.query(
+          `INSERT INTO notification_dead_letters (job_id, error_message) VALUES ($1, $2)
+           ON CONFLICT (job_id) DO UPDATE SET error_message = EXCLUDED.error_message, failed_at = now()`,
+          [jobId, errorMessage.slice(0, 500)],
+        )
+      })
+    },
   }
 }

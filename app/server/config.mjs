@@ -48,6 +48,10 @@ export function loadConfig(env = process.env) {
       h5Secret: env.WECHAT_H5_SECRET,
     },
     wechatPay,
+    appPush: {
+      endpoint: env.APP_PUSH_ENDPOINT,
+      key: env.APP_PUSH_KEY,
+    },
     features: {
       payment: Object.values(wechatPay).every((value) => typeof value === 'string' && value.trim().length > 0),
       appPush: hasAll(env, ['APP_PUSH_ENDPOINT', 'APP_PUSH_KEY']),
