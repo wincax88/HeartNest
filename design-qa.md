@@ -7,9 +7,9 @@
 
 **Implementation evidence**
 
-- Generated component: `C:\github\HeartNest\.worktrees\fix-mini-component-fill\app\dist\build\mp-weixin\components\CompanionCard.wxml`
-- Generated glass component: `C:\github\HeartNest\.worktrees\fix-mini-component-fill\app\dist\build\mp-weixin\components\HnGlassCard.wxml`
-- Generated home page: `C:\github\HeartNest\.worktrees\fix-mini-component-fill\app\dist\build\mp-weixin\pages\home\index.wxml`
+- Generated component: `C:\github\HeartNest\app\dist\build\mp-weixin\components\CompanionCard.wxml`
+- Generated glass component: `C:\github\HeartNest\app\dist\build\mp-weixin\components\HnGlassCard.wxml`
+- Generated home page: `C:\github\HeartNest\app\dist\build\mp-weixin\pages\home\index.wxml`
 
 **Viewport and state**
 
