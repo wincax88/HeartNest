@@ -6,6 +6,15 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('DATABASE_URL')
   })
 
+  it('rejects production startup without the three requested WeChat identity channels', () => {
+    expect(() => loadConfig({
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://test',
+      TOKEN_SIGNING_KEY: 'x'.repeat(32),
+      DATA_ENCRYPTION_KEY: 'y'.repeat(32),
+    })).toThrow('WECHAT_MINI_APP_ID')
+  })
+
   it('keeps optional platform capabilities disabled without credentials', () => {
     const config = loadConfig({
       NODE_ENV: 'test',
@@ -39,6 +48,26 @@ describe('loadConfig', () => {
       payment: true,
       appPush: true,
       phoneLogin: true,
+    })
+  })
+
+  it('exposes server-only WeChat identity credentials without marking incomplete providers ready', () => {
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://test',
+      TOKEN_SIGNING_KEY: 'x'.repeat(32),
+      DATA_ENCRYPTION_KEY: 'y'.repeat(32),
+      WECHAT_MINI_APP_ID: 'mini-app',
+      WECHAT_MINI_SECRET: 'mini-secret',
+    })
+
+    expect(config.wechat).toEqual({
+      miniAppId: 'mini-app',
+      miniSecret: 'mini-secret',
+      appId: undefined,
+      appSecret: undefined,
+      h5AppId: undefined,
+      h5Secret: undefined,
     })
   })
 })

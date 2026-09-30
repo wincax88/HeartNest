@@ -1,5 +1,6 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
+import { createAuthMiddleware } from './auth/middleware.mjs'
 import { companionIds, moodIds, moods } from './catalog.mjs'
 
 const validReplyStyles = new Set(['gentle', 'concise', 'reflective'])
@@ -12,20 +13,50 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder }) {
+export function createApi({ store, responder, authService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
   app.use(express.json({ limit: '32kb' }))
-  app.use('/api', (req, _res, next) => {
-    if (req.path === '/health') return next()
-    const deviceId = req.get('x-heartnest-device')
-    if (!validateDeviceId(deviceId)) return next(httpError(401, 'DEVICE_ID_REQUIRED', '缺少有效的设备标识'))
-    req.deviceId = deviceId
-    next()
-  })
-
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
+  if (authService) {
+    app.post('/api/auth/provider', route(async (req, res) => {
+      const session = await authService.login({
+        provider: req.body?.provider,
+        code: req.body?.code,
+        deviceSummary: req.get('user-agent')?.slice(0, 160) || null,
+      })
+      res.json(session)
+    }))
+    app.post('/api/auth/refresh', route(async (req, res) => {
+      const session = await authService.refresh(
+        req.body?.refreshToken,
+        req.get('user-agent')?.slice(0, 160) || null,
+      )
+      res.json(session)
+    }))
+    app.post('/api/auth/logout', route(async (req, res) => {
+      await authService.logout(req.body?.refreshToken)
+      res.status(204).end()
+    }))
+    app.use('/api', createAuthMiddleware(authService))
+  } else {
+    app.use('/api', (req, _res, next) => {
+      const deviceId = req.get('x-heartnest-device')
+      if (!validateDeviceId(deviceId)) return next(httpError(401, 'DEVICE_ID_REQUIRED', '缺少有效的设备标识'))
+      req.deviceId = deviceId
+      next()
+    })
+  }
+
+  if (authService) {
+    app.post('/api/auth/logout-all', route(async (req, res) => {
+      await authService.logoutAll(req.userId)
+      res.status(204).end()
+    }))
+  }
+
   app.get('/api/bootstrap', route(async (req, res) => res.json(await store.bootstrap(req.deviceId))))
 
   app.put('/api/state', route(async (req, res) => {
