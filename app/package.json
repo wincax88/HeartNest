@@ -46,7 +46,7 @@
     "migrate:json": "node server/migrate-json.mjs",
     "start": "node server/index.mjs"
   },
-  "dependencies": {
+  "devDependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",
     "@dcloudio/uni-app-harmony": "3.0.0-5020420260813003",
     "@dcloudio/uni-app-plus": "3.0.0-5020420260813003",
@@ -72,9 +72,7 @@
     "pinia": "^2.3.1",
     "sass": "^1.80.7",
     "vue": "^3.4.21",
-    "vue-i18n": "^9.1.9"
-  },
-  "devDependencies": {
+    "vue-i18n": "^9.1.9",
     "@dcloudio/types": "^3.4.8",
     "@dcloudio/uni-automator": "3.0.0-5020420260813003",
     "@dcloudio/uni-cli-shared": "3.0.0-5020420260813003",
