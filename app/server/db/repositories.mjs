@@ -130,6 +130,127 @@ export function createRepositories(pool) {
       )
     },
 
+    async recordConsent(userId, { privacyVersion, termsVersion, aiVersion }) {
+      const result = await pool.query(
+        `INSERT INTO consents (user_id, privacy_version, terms_version, ai_version)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, privacy_version, terms_version, ai_version, accepted_at`,
+        [userId, privacyVersion, termsVersion, aiVersion],
+      )
+      const row = result.rows[0]
+      return {
+        id: row.id,
+        privacyVersion: row.privacy_version,
+        termsVersion: row.terms_version,
+        aiVersion: row.ai_version,
+        acceptedAt: row.accepted_at.toISOString(),
+      }
+    },
+
+    async hasCurrentConsent(userId, { privacyVersion, termsVersion, aiVersion }) {
+      const result = await pool.query(
+        `SELECT 1 FROM consents
+         WHERE user_id = $1 AND privacy_version = $2 AND terms_version = $3
+           AND ai_version = $4 AND withdrawn_at IS NULL
+         ORDER BY accepted_at DESC LIMIT 1`,
+        [userId, privacyVersion, termsVersion, aiVersion],
+      )
+      return result.rowCount === 1
+    },
+
+    async createDataExport({ userId, downloadTokenHash, expiresAt }) {
+      const [user, identities, consents, moods, threads, messages, memories] = await Promise.all([
+        pool.query('SELECT id, display_name, avatar_url, time_zone, status, created_at, updated_at FROM users WHERE id = $1', [userId]),
+        pool.query('SELECT provider, created_at FROM user_identities WHERE user_id = $1', [userId]),
+        pool.query('SELECT privacy_version, terms_version, ai_version, accepted_at, withdrawn_at FROM consents WHERE user_id = $1', [userId]),
+        pool.query('SELECT mood_id, summary, recorded_at FROM mood_records WHERE user_id = $1 ORDER BY recorded_at', [userId]),
+        pool.query('SELECT id, companion_id, created_at FROM chat_threads WHERE user_id = $1 ORDER BY created_at', [userId]),
+        pool.query(`SELECT m.thread_id, m.sender, m.content, m.status, m.risk_level, m.created_at
+                    FROM chat_messages m JOIN chat_threads t ON t.id = m.thread_id
+                    WHERE t.user_id = $1 ORDER BY m.created_at`, [userId]),
+        pool.query('SELECT title, summary, retained, created_at FROM memories WHERE user_id = $1 ORDER BY created_at', [userId]),
+      ])
+      if (!user.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        profile: user.rows[0],
+        identities: identities.rows,
+        consents: consents.rows,
+        moods: moods.rows,
+        threads: threads.rows,
+        messages: messages.rows,
+        memories: memories.rows,
+      }
+      const result = await pool.query(
+        `INSERT INTO data_exports (user_id, status, download_token_hash, expires_at, payload)
+         VALUES ($1, 'ready', $2, $3, $4::jsonb)
+         RETURNING id, status, expires_at`,
+        [userId, downloadTokenHash, expiresAt, JSON.stringify(payload)],
+      )
+      return { id: result.rows[0].id, status: result.rows[0].status, expiresAt: result.rows[0].expires_at.toISOString() }
+    },
+
+    async consumeDataExport({ userId, exportId, downloadTokenHash }) {
+      return withTransaction(pool, async (client) => {
+        const result = await client.query(
+          `SELECT * FROM data_exports WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+          [exportId, userId],
+        )
+        if (!result.rowCount || result.rows[0].download_token_hash !== downloadTokenHash) {
+          throw Object.assign(new Error('导出文件不存在'), { status: 404, code: 'EXPORT_NOT_FOUND' })
+        }
+        const record = result.rows[0]
+        if (record.downloaded_at) throw Object.assign(new Error('下载凭据已使用'), { status: 410, code: 'EXPORT_TOKEN_USED' })
+        if (record.expires_at.getTime() <= Date.now()) throw Object.assign(new Error('下载凭据已过期'), { status: 410, code: 'EXPORT_EXPIRED' })
+        await client.query('UPDATE data_exports SET downloaded_at = now(), updated_at = now() WHERE id = $1', [exportId])
+        return record.payload
+      })
+    },
+
+    async requestDeletion(userId, deleteAfter) {
+      const result = await pool.query(
+        `UPDATE users SET status = 'deletion_pending', delete_after = $2, updated_at = now()
+         WHERE id = $1
+         RETURNING status, delete_after`,
+        [userId, deleteAfter],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+      await pool.query('UPDATE sessions SET revoked_at = COALESCE(revoked_at, now()), updated_at = now() WHERE user_id = $1', [userId])
+      return { status: result.rows[0].status, deleteAfter: result.rows[0].delete_after.toISOString() }
+    },
+
+    async cancelDeletion(userId) {
+      const result = await pool.query(
+        `UPDATE users SET status = 'active', delete_after = NULL, updated_at = now()
+         WHERE id = $1 AND status = 'deletion_pending'
+         RETURNING status`,
+        [userId],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('没有待取消的注销请求'), { status: 409, code: 'DELETION_NOT_PENDING' })
+      return { status: result.rows[0].status }
+    },
+
+    async deleteDueUsers(now = new Date()) {
+      return withTransaction(pool, async (client) => {
+        const result = await client.query(
+          `WITH due AS MATERIALIZED (
+             SELECT id FROM users
+             WHERE status = 'deletion_pending' AND delete_after <= $1
+             FOR UPDATE
+           ), tombstones AS (
+             INSERT INTO deletion_tombstones (user_hash, deleted_at)
+             SELECT encode(digest(id::text, 'sha256'), 'hex'), $1 FROM due
+             ON CONFLICT (user_hash) DO NOTHING
+           ), deleted AS (
+             DELETE FROM users WHERE id IN (SELECT id FROM due) RETURNING id
+           )
+           SELECT count(*)::int AS count FROM deleted`,
+          [now],
+        )
+        return { deleted: result.rows[0].count }
+      })
+    },
+
     async insertMessage(userId, companionId, { clientMessageId, content }) {
       if (!clientMessageId || !content) throw domainError('INVALID_MESSAGE', '消息标识和内容不能为空')
       return withTransaction(pool, async (client) => {

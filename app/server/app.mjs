@@ -13,7 +13,7 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, authService = null }) {
+export function createApi({ store, responder, authService = null, privacyService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
@@ -54,6 +54,28 @@ export function createApi({ store, responder, authService = null }) {
     app.post('/api/auth/logout-all', route(async (req, res) => {
       await authService.logoutAll(req.userId)
       res.status(204).end()
+    }))
+  }
+
+  if (privacyService) {
+    app.post('/api/privacy/consents', route(async (req, res) => {
+      const consent = await privacyService.acceptConsent(req.userId, req.body)
+      res.status(201).json(consent)
+    }))
+    app.post('/api/privacy/exports', route(async (req, res) => {
+      const exported = await privacyService.createExport(req.userId)
+      res.status(201).json(exported)
+    }))
+    app.get('/api/privacy/exports/:id', route(async (req, res) => {
+      const payload = await privacyService.consumeExport(req.userId, req.params.id, req.query.token)
+      res.json(payload)
+    }))
+    app.post('/api/account/deletion', route(async (req, res) => {
+      const result = await privacyService.requestDeletion(req.userId)
+      res.status(202).json(result)
+    }))
+    app.delete('/api/account/deletion', route(async (req, res) => {
+      res.json(await privacyService.cancelDeletion(req.userId))
     }))
   }
 
@@ -113,6 +135,7 @@ export function createApi({ store, responder, authService = null }) {
     if (!moodIds.has(moodId)) throw httpError(400, 'INVALID_MOOD', '情绪选项无效')
     if (typeof text !== 'string' || !text.trim() || text.trim().length > 2000) throw httpError(400, 'INVALID_MESSAGE', '消息必须为 1–2000 个字符')
     if (typeof clientMessageId !== 'string' || clientMessageId.length > 100) throw httpError(400, 'INVALID_MESSAGE_ID', '消息标识无效')
+    if (privacyService) await privacyService.requireCurrentConsent(req.userId)
 
     const context = await store.update(req.deviceId, (user) => {
       const thread = store.findThread(user, companionId)
