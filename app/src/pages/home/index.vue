@@ -48,7 +48,7 @@ function navigate(destination: string) {
 
 <template>
   <view class="hn-screen">
-    <image class="hn-night-bg" src="/static/heartnest/night-cat.jpg" mode="aspectFill" />
+    <image class="hn-night-bg" src="/static/heartnest/night-cat.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="home-scroll">
       <view class="hn-page home-page">

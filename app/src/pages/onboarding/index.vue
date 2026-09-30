@@ -16,7 +16,7 @@ function enter() {
 
 <template>
   <view class="hn-screen onboarding">
-    <image class="onboarding__bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" />
+    <image class="onboarding__bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="onboarding__shade" />
     <view class="onboarding__brand"><uni-icons type="heart-filled" :size="27" color="#ffd2dc" /><view><text>心栖</text><text>HeartNest</text></view></view>
     <swiper class="onboarding__swiper" :current="current" @change="current = $event.detail.current">

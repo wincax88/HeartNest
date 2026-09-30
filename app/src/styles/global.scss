@@ -23,6 +23,35 @@ button::after {
   border: 0;
 }
 
+button:focus-visible,
+input:focus-visible,
+[role='button']:focus-visible,
+[role='tab']:focus-visible,
+[role='radio']:focus-visible {
+  outline: 3px solid $hn-focus;
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
 .hn-screen {
   position: relative;
   min-height: 100vh;

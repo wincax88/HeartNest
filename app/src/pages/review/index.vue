@@ -19,6 +19,12 @@ const dateRange = computed(() => {
   const days = reviewStore.reviewDays
   return days.length ? `${days[0].date} — ${days.at(-1)?.date}` : '--'
 })
+const trendSummary = computed(() => {
+  const recorded = reviewStore.reviewDays.filter((day) => day.recorded)
+  if (!recorded.length) return '近 7 天暂无情绪记录。'
+  const average = recorded.reduce((sum, day) => sum + day.score, 0) / recorded.length
+  return `近 7 天记录了 ${recorded.length} 天，平均情绪强度 ${average.toFixed(1)} 分。`
+})
 onMounted(() => bootstrapStore.initialize(true).catch((error) => uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })))
 
 async function applyFilters() {
@@ -38,7 +44,7 @@ function goHome() { uni.reLaunch({ url: '/pages/home/index' }) }
 
 <template>
   <view class="hn-screen">
-    <image class="hn-night-bg" src="/static/heartnest/night-cat.jpg" mode="aspectFill" />
+    <image class="hn-night-bg" src="/static/heartnest/night-cat.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="review-scroll">
       <view class="hn-page review-page">
@@ -56,11 +62,15 @@ function goHome() { uni.reLaunch({ url: '/pages/home/index' }) }
 
         <HnGlassCard class="trend-card">
           <view class="trend-copy"><text>{{ hasRecords ? '这是你近七天的真实记录' : '这一周还没有记录' }}</text><text>{{ hasRecords ? '每一次选择的情绪都会在这里留下轨迹。' : '去首页选择此刻的感受，从今天开始。' }}</text></view>
+          <text data-testid="review-summary" class="sr-only">{{ trendSummary }}</text>
           <view class="chart">
             <view v-for="(day, index) in reviewStore.reviewDays" :key="day.date" data-testid="review-day" class="chart-day">
               <view class="chart-track"><view class="chart-bar" :class="{ 'chart-bar--empty': !day.recorded }" :style="{ height: `${heights[index]}%` }"><view class="chart-dot" /></view></view>
               <text class="chart-weekday">{{ day.weekday.slice(1) }}</text>
             </view>
+          </view>
+          <view class="sr-only" role="list" aria-label="近七天情绪数据">
+            <text v-for="day in reviewStore.reviewDays" :key="`row-${day.date}`" data-testid="review-data-row" role="listitem">{{ day.date }}，{{ day.recorded ? `情绪强度 ${day.score} 分` : '无记录' }}</text>
           </view>
           <view class="trend-footer"><uni-icons type="heart-filled" :size="18" color="#ffb6d7" /><text>{{ hasRecords ? '数据来自你的每日情绪选择' : '暂无可比较的记录' }}</text></view>
         </HnGlassCard>

@@ -72,7 +72,7 @@ function navigate(destination: string) {
 
 <template>
   <view class="hn-screen">
-    <image class="hn-night-bg profile-bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" />
+    <image class="hn-night-bg profile-bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="profile-scroll">
       <view class="hn-page user-page">
@@ -85,7 +85,7 @@ function navigate(destination: string) {
           </HnAction>
         </view>
         <HnAction data-testid="edit-profile" class="user-card" label="编辑个人资料" @activate="openProfileEdit">
-          <image :src="profileStore.profile.avatar || '/static/heartnest/mika-profile.jpg'" mode="aspectFill" />
+          <image :src="profileStore.profile.avatar || '/static/heartnest/mika-profile.jpg'" mode="aspectFill" aria-hidden="true" />
           <view class="user-copy"><text>{{ profileStore.profile.displayName }}</text><text>连续陪伴 {{ profileStore.profile.streakDays }} 天</text></view>
           <view class="streak"><uni-icons type="fire-filled" :size="19" color="#ffd1a3" /><text>{{ profileStore.profile.streakDays }}</text></view>
         </HnAction>
