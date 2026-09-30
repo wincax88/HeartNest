@@ -36,6 +36,7 @@ if ($workloadText -notmatch 'nginx\.ingress\.kubernetes\.io/ssl-redirect:\s+"tru
 if ($workloadText -notmatch 'name:\s+DATABASE_URL[\s\S]+secretKeyRef:[\s\S]+name:\s+heartnest-runtime') { throw 'Workload must read DATABASE_URL from heartnest-runtime.' }
 if ($postgresText -notmatch 'kind:\s+StatefulSet[\s\S]+name:\s+heartnest-postgres') { throw 'A HeartNest-only PostgreSQL StatefulSet is required.' }
 if ($postgresText -notmatch 'image:\s+postgres:16-alpine') { throw 'PostgreSQL must use the pinned 16-alpine image.' }
+if ($postgresText -notmatch 'name:\s+PGDATA[\s\S]+value:\s+/var/lib/postgresql/data/pgdata') { throw 'PostgreSQL must initialize inside a writable PGDATA subdirectory.' }
 if ($migrationText -notmatch 'kind:\s+Job[\s\S]+name:\s+heartnest-db-migrate') { throw 'A database migration Job is required.' }
 if ($migrationText -notmatch 'server/db/migrate\.mjs') { throw 'Migration Job must run the database migration entry point.' }
 foreach ($required in @('pg_dump', 'aes-256-cbc', 'pbkdf2', 'BACKUP_ENCRYPTION_KEY', '-mtime +30')) {
