@@ -6,6 +6,7 @@ import ProfilePage from '@/pages/profile/index.vue'
 import SettingsPage from '@/pages/settings/index.vue'
 import MembershipPage from '@/pages/membership/index.vue'
 import { useProfileStore } from '@/stores/profile'
+import { useReviewStore } from '@/stores/review'
 
 describe('review and profile flows', () => {
   const navigateTo = vi.fn()
@@ -34,6 +35,18 @@ describe('review and profile flows', () => {
     expect(wrapper.findAll('[data-testid="review-day"]')).toHaveLength(7)
     expect(wrapper.findAll('[data-testid="memory-item"]')).toHaveLength(3)
     expect(wrapper.text()).toContain('这是你近七天的真实记录')
+  })
+
+  it('offers a next step when review memories are empty', async () => {
+    const pinia = createPinia()
+    const reLaunch = vi.fn()
+    vi.stubGlobal('uni', { navigateTo, navigateBack: vi.fn(), reLaunch, showToast: vi.fn() })
+    const wrapper = mount(ReviewPage, { global: { plugins: [pinia] } })
+    await flushPromises()
+    useReviewStore(pinia).memories = []
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-testid="review-empty"] button').trigger('click')
+    expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/home/index' })
   })
 
   it('opens settings and membership from profile', async () => {
@@ -65,16 +78,14 @@ describe('review and profile flows', () => {
     expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/review/index' })
 
     await wrapper.get('[data-testid="menu-favorites"]').trigger('click')
-    expect(reLaunch).toHaveBeenCalledWith({ url: '/pages/review/index' })
+    expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/favorites/index' })
   })
 
-  it('updates local notification preferences', async () => {
+  it('opens platform-backed notification settings', async () => {
     const pinia = createPinia()
     const wrapper = mount(SettingsPage, { global: { plugins: [pinia] } })
-    const profileStore = useProfileStore(pinia)
-    expect(profileStore.preferences.notificationsEnabled).toBe(true)
-    await wrapper.get('[data-testid="notification-toggle"]').trigger('click')
-    expect(profileStore.preferences.notificationsEnabled).toBe(false)
+    await wrapper.get('[data-testid="notification-settings-row"]').trigger('click')
+    expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/notification-settings/index' })
   })
 
   it('toggles memory prompts and opens settings actions', async () => {
@@ -95,13 +106,13 @@ describe('review and profile flows', () => {
     expect(showModal).toHaveBeenCalledWith(expect.objectContaining({ title: '帮助与反馈' }))
   })
 
-  it('activates the server-backed membership trial', async () => {
+  it('waits for a verified payment callback before granting membership', async () => {
     const pinia = createPinia()
     const wrapper = mount(MembershipPage, { global: { plugins: [pinia] } })
     const profileStore = useProfileStore(pinia)
     await wrapper.get('[data-testid="upgrade-membership"]').trigger('click')
     await flushPromises()
-    expect(profileStore.membership.tier).toBe('pro')
-    expect(wrapper.text()).toContain('已解锁心栖试用')
+    expect(profileStore.membership.tier).toBe('free')
+    expect(wrapper.text()).toContain('等待支付确认')
   })
 })

@@ -86,6 +86,40 @@ export interface Membership {
   trialEndsAt?: string
 }
 
+export interface Entitlements {
+  plan: 'free' | 'pro'
+  capabilities: Record<string, { enabled: boolean; limit: number | null; used: number; remaining: number | null; resetAt: string | null }>
+}
+
+export interface PaymentOrder {
+  id: string
+  status: 'created' | 'pending' | 'confirming' | 'paid' | 'failed' | 'closed'
+  amount: number
+  currency: string
+  merchantOrderNo?: string
+  platform?: { prepayId?: string }
+}
+
+export interface FavoriteItem {
+  id: string
+  targetId: string
+  content: string
+  companionId: CompanionId
+  messageCreatedAt: string
+  createdAt: string
+}
+
+export interface ReminderSchedule {
+  id: string
+  channel: 'wechat' | 'app'
+  time: string
+  timeZone: string
+  quietStart: string
+  quietEnd: string
+  enabled: boolean
+  nextDeliveryAt: string
+}
+
 export interface AppPreferences {
   notificationsEnabled: boolean
   replyStyle: 'gentle' | 'concise' | 'reflective'

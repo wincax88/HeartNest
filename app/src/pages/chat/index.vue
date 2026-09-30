@@ -3,6 +3,8 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import ChatBubble from '@/components/ChatBubble.vue'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import MemoryPrompt from '@/components/MemoryPrompt.vue'
+import HnAsyncState from '@/components/HnAsyncState.vue'
+import { useNetworkState } from '@/composables/useNetworkState'
 import type { CompanionId } from '@/domain/models'
 import type { ChatMessage } from '@/domain/models'
 import { useAppStore } from '@/stores/app'
@@ -14,6 +16,8 @@ const appStore = useAppStore()
 const bootstrapStore = useBootstrapStore()
 const draft = ref('')
 const memorySaved = ref(false)
+const loadError = ref('')
+const { online } = useNetworkState()
 const companion = computed(() => bootstrapStore.companionById[chatStore.companionId])
 
 const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
@@ -27,8 +31,10 @@ onMounted(async () => {
     if (!bootstrapStore.companionById[chatStore.companionId]) chatStore.companionId = 'mika'
     chatStore.moodId = appStore.selectedMoodId
     await chatStore.load(chatStore.companionId)
-  } catch (error) { showError(error) }
+  } catch (error) { loadError.value = error instanceof Error ? error.message : '对话加载失败'; showError(error) }
 })
+
+function reload() { loadError.value = ''; chatStore.load(chatStore.companionId).catch((error) => { loadError.value = error instanceof Error ? error.message : '对话加载失败' }) }
 
 function showError(error: unknown) {
   uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
@@ -37,13 +43,16 @@ function showError(error: unknown) {
 async function send() {
   const content = draft.value.trim()
   if (!content || chatStore.isReplying) return
-  draft.value = ''
-  try { await chatStore.send(content) } catch (error) { showError(error) }
+  try { await chatStore.send(content); draft.value = '' } catch (error) { showError(error) }
   await nextTick()
 }
 
 function retry(message: ChatMessage) {
   chatStore.retry(message).catch(showError)
+}
+
+function toggleFavorite(message: ChatMessage) {
+  chatStore.toggleFavorite(message).catch(showError)
 }
 
 async function saveMemory() {
@@ -69,6 +78,8 @@ function goBack() {
       <HnAppHeader back :title="companion.name" subtitle="在线 · 正在陪伴" @back="goBack">
         <image class="header-avatar" :src="companion.avatar" mode="aspectFill" />
       </HnAppHeader>
+      <HnAsyncState v-if="!online" state="offline" title="离线浏览历史对话" description="消息会保持只读，联网后可继续发送。" />
+      <HnAsyncState v-else-if="loadError" state="error" :title="loadError" action-label="重试" @action="reload" />
 
       <scroll-view scroll-y class="message-list">
         <view class="date-divider"><text>今晚</text></view>
@@ -77,7 +88,14 @@ function goBack() {
           <text>{{ companion.name }} 会温柔地听你说，也会尊重你不想继续的话题。</text>
         </view>
 
-        <ChatBubble v-for="message in chatStore.messages" :key="message.id" :message="message" @retry="retry(message)" />
+        <ChatBubble
+          v-for="message in chatStore.messages"
+          :key="message.id"
+          :message="message"
+          :favorite="Boolean(chatStore.favoriteByMessage[message.id])"
+          @retry="retry(message)"
+          @favorite="toggleFavorite(message)"
+        />
         <view v-if="chatStore.isReplying" class="typing-row">
           <view class="typing-dot" /><view class="typing-dot" /><view class="typing-dot" />
           <text>正在回应</text>
@@ -91,7 +109,7 @@ function goBack() {
             v-model="draft"
             data-testid="chat-input"
             class="composer-input"
-            :disabled="chatStore.isReplying"
+            :disabled="chatStore.isReplying || !online"
             placeholder="想说什么都可以…"
             placeholder-class="composer-placeholder"
             confirm-type="send"
@@ -100,7 +118,7 @@ function goBack() {
           <button
             data-testid="chat-send"
             class="send-button"
-            :disabled="chatStore.isReplying || !draft.trim()"
+            :disabled="chatStore.isReplying || !draft.trim() || !online"
             aria-label="发送"
             @click="send"
           >
@@ -111,10 +129,14 @@ function goBack() {
       </view>
     </view>
   </view>
+  <view v-else class="hn-screen chat-screen chat-fallback">
+    <HnAsyncState :state="loadError ? 'error' : (!online ? 'offline' : 'loading')" :title="loadError || (!online ? '当前处于离线状态' : '正在载入对话…')" :action-label="loadError && online ? '重试' : ''" @action="reload" />
+  </view>
 </template>
 
 <style scoped lang="scss">
 .chat-screen { background: #050d20; }
+.chat-fallback { display: grid; place-items: center; padding: 40rpx; }
 .chat-shade { position: fixed; inset: 0; background: linear-gradient(180deg, rgba(6, 13, 38, 0.62), rgba(5, 13, 32, 0.9) 48%, #050d20 100%); pointer-events: none; }
 .chat-page { position: relative; z-index: 2; display: grid; grid-template-rows: auto 1fr auto; width: 100%; max-width: 786rpx; height: 100vh; margin: 0 auto; padding: calc(var(--status-bar-height, 24px) + 12rpx) 28rpx env(safe-area-inset-bottom); }
 .header-avatar { width: 68rpx; height: 68rpx; border: 2rpx solid rgba(255, 225, 239, 0.56); border-radius: 50%; }

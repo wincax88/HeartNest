@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: heartnest-db-migrate
+  namespace: ns-i61rahoe
+  labels:
+    app.kubernetes.io/name: heartnest-db-migrate
+    app.kubernetes.io/part-of: heartnest
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: heartnest-db-migrate
+        app.kubernetes.io/part-of: heartnest
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: __IMAGE__
+          command:
+            - sh
+            - -ec
+            - |
+              node /app/server/db/migrate.mjs
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: heartnest-runtime
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi

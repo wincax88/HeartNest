@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue({
     template: {
       compilerOptions: {
-        isCustomElement: (tag) => tag.startsWith('uni-') || ['scroll-view', 'swiper', 'swiper-item'].includes(tag),
+        isCustomElement: (tag) => tag.startsWith('uni-') || ['scroll-view', 'swiper', 'swiper-item', 'picker'].includes(tag),
       },
     },
   })],
@@ -26,5 +26,6 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    exclude: ['tests/integration/**', '**/node_modules/**', '**/dist/**'],
   },
 })

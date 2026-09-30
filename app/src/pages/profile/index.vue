@@ -2,6 +2,8 @@
 import { computed, onMounted } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
+import HnAction from '@/components/HnAction.vue'
+import HnAsyncState from '@/components/HnAsyncState.vue'
 import { useBootstrapStore } from '@/stores/bootstrap'
 import { useProfileStore } from '@/stores/profile'
 
@@ -46,6 +48,8 @@ function openMembership() {
   uni.navigateTo({ url: '/pages/membership/index' })
 }
 
+function openProfileEdit() { uni.navigateTo({ url: '/pages/profile-edit/index' }) }
+
 function openMenuItem(id: 'companions' | 'calendar' | 'favorites') {
   if (id === 'companions') {
     uni.navigateTo({ url: `/pages/companion/index?id=${profileStore.profile.preferredCompanionId}` })
@@ -55,7 +59,7 @@ function openMenuItem(id: 'companions' | 'calendar' | 'favorites') {
     uni.reLaunch({ url: '/pages/review/index' })
     return
   }
-  uni.reLaunch({ url: '/pages/review/index' })
+  uni.navigateTo({ url: '/pages/favorites/index' })
 }
 
 function navigate(destination: string) {
@@ -68,21 +72,23 @@ function navigate(destination: string) {
 
 <template>
   <view class="hn-screen">
-    <image class="hn-night-bg profile-bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" />
+    <image class="hn-night-bg profile-bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="profile-scroll">
       <view class="hn-page user-page">
+        <HnAsyncState v-if="bootstrapStore.loading && !bootstrapStore.loaded" state="loading" title="正在载入个人资料…" />
+        <HnAsyncState v-else-if="bootstrapStore.error && !bootstrapStore.loaded" state="error" :title="bootstrapStore.error" action-label="重试" @action="bootstrapStore.initialize(true).catch(showError)" />
         <view class="top-row">
           <text>我的</text>
-          <view data-testid="open-settings" class="settings-btn" role="button" aria-label="设置" @click="openSettings">
+          <HnAction data-testid="open-settings" class="settings-btn" label="设置" @activate="openSettings">
             <uni-icons type="gear-filled" :size="26" color="#e6e7f6" />
-          </view>
+          </HnAction>
         </view>
-        <view class="user-card">
-          <image :src="profileStore.profile.avatar || '/static/heartnest/mika-profile.jpg'" mode="aspectFill" />
+        <HnAction data-testid="edit-profile" class="user-card" label="编辑个人资料" @activate="openProfileEdit">
+          <image :src="profileStore.profile.avatar || '/static/heartnest/mika-profile.jpg'" mode="aspectFill" aria-hidden="true" />
           <view class="user-copy"><text>{{ profileStore.profile.displayName }}</text><text>连续陪伴 {{ profileStore.profile.streakDays }} 天</text></view>
           <view class="streak"><uni-icons type="fire-filled" :size="19" color="#ffd1a3" /><text>{{ profileStore.profile.streakDays }}</text></view>
-        </view>
+        </HnAction>
 
         <HnGlassCard data-testid="open-membership" class="membership-banner" @click="openMembership">
           <view class="member-icon"><uni-icons type="vip-filled" :size="28" color="#fff1c9" /></view>
@@ -98,17 +104,18 @@ function navigate(destination: string) {
 
         <view class="hn-section-title">我的心栖</view>
         <HnGlassCard class="menu-card">
-          <view
+          <HnAction
             v-for="item in menu"
             :key="item.id"
             :data-testid="`menu-${item.id}`"
             class="menu-row"
-            @click="openMenuItem(item.id)"
+            :label="item.title"
+            @activate="openMenuItem(item.id)"
           >
             <view class="menu-icon"><uni-icons :type="item.icon" :size="23" :color="item.color" /></view>
             <view><text>{{ item.title }}</text><text>{{ item.subtitle }}</text></view>
             <uni-icons type="right" :size="20" color="#8f99b9" />
-          </view>
+          </HnAction>
         </HnGlassCard>
 
         <text class="gentle-note">谢谢你，愿意把一些时刻留在这里。</text>

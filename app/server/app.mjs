@@ -1,6 +1,10 @@
 import express from 'express'
 import { randomUUID } from 'node:crypto'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import helmet from 'helmet'
+import { createAuthMiddleware } from './auth/middleware.mjs'
 import { companionIds, moodIds, moods } from './catalog.mjs'
+import { createObservability } from './observability.mjs'
 
 const validReplyStyles = new Set(['gentle', 'concise', 'reflective'])
 
@@ -12,20 +16,156 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null, repositories = null, observability = createObservability() }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
-  app.use(express.json({ limit: '32kb' }))
-  app.use('/api', (req, _res, next) => {
-    if (req.path === '/health') return next()
-    const deviceId = req.get('x-heartnest-device')
-    if (!validateDeviceId(deviceId)) return next(httpError(401, 'DEVICE_ID_REQUIRED', '缺少有效的设备标识'))
-    req.deviceId = deviceId
-    next()
+  app.use(helmet({ contentSecurityPolicy: false }))
+  app.use(observability.middleware)
+  app.use(express.json({
+    limit: '32kb',
+    verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer) },
+  }))
+  const limiterKey = (req) => req.userId || req.deviceId || ipKeyGenerator(req.ip)
+  const chatMinuteLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 12,
+    keyGenerator: limiterKey,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_RATE_LIMIT', message: '发送得有点快，请稍后再试', retryAfterSeconds: 60 } }),
   })
-
+  const chatDayLimiter = rateLimit({
+    windowMs: 86_400_000,
+    limit: 100,
+    keyGenerator: limiterKey,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_DAILY_LIMIT', message: '今天的对话额度已用完', retryAfterSeconds: 86_400 } }),
+  })
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
+  app.get('/metrics', observability.metricsHandler)
+
+  if (paymentService) {
+    app.post('/api/payments/wechat/callback', route(async (req, res) => {
+      await paymentService.handleWechatCallback({ headers: req.headers, rawBody: req.rawBody, body: req.body })
+      res.status(204).end()
+    }))
+  }
+
+  if (authService) {
+    app.post('/api/auth/provider', route(async (req, res) => {
+      const session = await authService.login({
+        provider: req.body?.provider,
+        code: req.body?.code,
+        deviceSummary: req.get('user-agent')?.slice(0, 160) || null,
+      })
+      res.json(session)
+    }))
+    app.post('/api/auth/refresh', route(async (req, res) => {
+      const session = await authService.refresh(
+        req.body?.refreshToken,
+        req.get('user-agent')?.slice(0, 160) || null,
+      )
+      res.json(session)
+    }))
+    app.post('/api/auth/logout', route(async (req, res) => {
+      await authService.logout(req.body?.refreshToken)
+      res.status(204).end()
+    }))
+    app.use('/api', createAuthMiddleware(authService))
+  } else {
+    app.use('/api', (req, _res, next) => {
+      const deviceId = req.get('x-heartnest-device')
+      if (!validateDeviceId(deviceId)) return next(httpError(401, 'DEVICE_ID_REQUIRED', '缺少有效的设备标识'))
+      req.deviceId = deviceId
+      next()
+    })
+  }
+
+  if (authService) {
+    app.post('/api/auth/logout-all', route(async (req, res) => {
+      await authService.logoutAll(req.userId)
+      res.status(204).end()
+    }))
+  }
+
+  if (privacyService) {
+    app.post('/api/privacy/consents', route(async (req, res) => {
+      const consent = await privacyService.acceptConsent(req.userId, req.body)
+      res.status(201).json(consent)
+    }))
+    app.post('/api/privacy/exports', route(async (req, res) => {
+      const exported = await privacyService.createExport(req.userId)
+      res.status(201).json(exported)
+    }))
+    app.get('/api/privacy/exports/:id', route(async (req, res) => {
+      const payload = await privacyService.consumeExport(req.userId, req.params.id, req.query.token)
+      res.json(payload)
+    }))
+    app.post('/api/account/deletion', route(async (req, res) => {
+      const result = await privacyService.requestDeletion(req.userId)
+      res.status(202).json(result)
+    }))
+    app.delete('/api/account/deletion', route(async (req, res) => {
+      res.json(await privacyService.cancelDeletion(req.userId))
+    }))
+  }
+
+  if (entitlementService) {
+    app.get('/api/entitlements', route(async (req, res) => {
+      res.json(await entitlementService.forUser(req.userId))
+    }))
+  }
+
+  if (paymentService) {
+    app.post('/api/payments/orders', route(async (req, res) => {
+      const order = await paymentService.createOrder(req.userId, req.body?.productId, {
+        clientType: req.body?.clientType,
+        openId: req.body?.openId,
+      })
+      res.status(201).json(order)
+    }))
+    app.get('/api/payments/orders/:id', route(async (req, res) => {
+      res.json(await paymentService.getOrder(req.userId, req.params.id))
+    }))
+  }
+
+  if (notificationService) {
+    app.post('/api/notifications/devices', route(async (req, res) => {
+      res.status(201).json(await notificationService.registerDevice(req.userId, req.body || {}))
+    }))
+    app.post('/api/notifications/authorizations', route(async (req, res) => {
+      res.status(201).json(await notificationService.authorizeTemplate(req.userId, req.body || {}))
+    }))
+    app.get('/api/reminders', route(async (req, res) => res.json(await notificationService.listSchedules(req.userId))))
+    app.post('/api/reminders', route(async (req, res) => {
+      res.status(201).json(await notificationService.createSchedule(req.userId, req.body || {}))
+    }))
+    app.put('/api/reminders/:id', route(async (req, res) => {
+      res.json(await notificationService.updateSchedule(req.userId, req.params.id, req.body || {}))
+    }))
+    app.delete('/api/reminders/:id', route(async (req, res) => {
+      await notificationService.deleteSchedule(req.userId, req.params.id)
+      res.status(204).end()
+    }))
+  }
+
+  if (contentService) {
+    app.patch('/api/profile', route(async (req, res) => res.json(await contentService.updateProfile(req.userId, req.body || {}))))
+    app.get('/api/favorites', route(async (req, res) => res.json(await contentService.listFavorites(req.userId))))
+    app.post('/api/favorites', route(async (req, res) => {
+      res.status(201).json(await contentService.favoriteMessage(req.userId, req.body?.messageId))
+    }))
+    app.delete('/api/favorites/:id', route(async (req, res) => {
+      await contentService.deleteFavorite(req.userId, req.params.id)
+      res.status(204).end()
+    }))
+    app.get('/api/review', route(async (req, res) => {
+      res.json(await contentService.review(req.userId, { from: req.query.from, to: req.query.to, mood: req.query.mood }))
+    }))
+  }
+
   app.get('/api/bootstrap', route(async (req, res) => res.json(await store.bootstrap(req.deviceId))))
 
   app.put('/api/state', route(async (req, res) => {
@@ -75,19 +215,24 @@ export function createApi({ store, responder }) {
     res.json(thread)
   }))
 
-  app.post('/api/chats/:companionId/messages', route(async (req, res) => {
+  app.post('/api/chats/:companionId/messages', chatMinuteLimiter, chatDayLimiter, route(async (req, res) => {
     const companionId = req.params.companionId
     const { text, moodId, clientMessageId } = req.body ?? {}
     if (!companionIds.has(companionId)) throw httpError(404, 'COMPANION_NOT_FOUND', '陪伴者不存在')
     if (!moodIds.has(moodId)) throw httpError(400, 'INVALID_MOOD', '情绪选项无效')
     if (typeof text !== 'string' || !text.trim() || text.trim().length > 2000) throw httpError(400, 'INVALID_MESSAGE', '消息必须为 1–2000 个字符')
     if (typeof clientMessageId !== 'string' || clientMessageId.length > 100) throw httpError(400, 'INVALID_MESSAGE_ID', '消息标识无效')
+    if (privacyService) await privacyService.requireCurrentConsent(req.userId)
+    const quota = entitlementService
+      ? await entitlementService.consume(req.userId, 'daily_chat', { referenceId: clientMessageId })
+      : null
+    if (repositories) await repositories.insertMessage(req.userId, companionId, { clientMessageId, content: text.trim() })
 
     const context = await store.update(req.deviceId, (user) => {
       const thread = store.findThread(user, companionId)
       let userMessage = thread.messages.find((item) => item.id === clientMessageId)
       if (!userMessage) {
-        userMessage = { id: clientMessageId, sender: 'user', content: text.trim(), createdAt: new Date().toISOString(), status: 'sending' }
+        userMessage = { id: clientMessageId, sender: 'user', content: text.trim(), createdAt: new Date().toISOString(), status: 'sending', riskLevel: 'normal' }
         thread.messages.push(userMessage)
       } else {
         userMessage.status = 'sending'
@@ -96,24 +241,31 @@ export function createApi({ store, responder }) {
     })
 
     try {
-      const content = await responder({ companionId, moodId, messages: context.messages, replyStyle: context.replyStyle })
+      const response = safeResponder
+        ? await safeResponder({ companionId, moodId, messages: context.messages, replyStyle: context.replyStyle })
+        : { content: await responder({ companionId, moodId, messages: context.messages, replyStyle: context.replyStyle }), riskLevel: 'normal' }
       const result = await store.update(req.deviceId, (user) => {
         const thread = store.findThread(user, companionId)
         const userMessage = thread.messages.find((item) => item.id === clientMessageId)
         userMessage.status = 'sent'
+        userMessage.riskLevel = response.riskLevel
         let companionMessage = thread.messages.find((item) => item.replyTo === clientMessageId)
         if (!companionMessage) {
-          companionMessage = { id: randomUUID(), sender: 'companion', content, createdAt: new Date().toISOString(), status: 'sent', replyTo: clientMessageId }
+          companionMessage = { id: randomUUID(), sender: 'companion', content: response.content, createdAt: new Date().toISOString(), status: 'sent', replyTo: clientMessageId }
           thread.messages.push(companionMessage)
         }
-        return { threadId: thread.id, userMessage, companionMessage }
+        return { threadId: thread.id, userMessage, companionMessage, quota }
       })
-      res.status(201).json(result)
+      const persisted = repositories
+        ? await repositories.completeChatExchange(req.userId, companionId, { clientMessageId, companionContent: response.content, riskLevel: response.riskLevel })
+        : null
+      res.status(201).json(persisted ? { threadId: result.threadId, ...persisted, quota } : result)
     } catch (error) {
       await store.update(req.deviceId, (user) => {
         const message = store.findThread(user, companionId).messages.find((item) => item.id === clientMessageId)
         if (message) message.status = 'failed'
       })
+      if (repositories) await repositories.markChatMessageFailed(req.userId, companionId, clientMessageId)
       throw error
     }
   }))
@@ -165,10 +317,10 @@ export function createApi({ store, responder }) {
 
   app.use('/api', (_req, _res, next) => next(httpError(404, 'API_NOT_FOUND', '接口不存在')))
 
-  app.use((error, _req, res, _next) => {
+  app.use((error, req, res, _next) => {
     const status = error instanceof SyntaxError && 'body' in error ? 400 : (Number.isInteger(error.status) ? error.status : 500)
-    if (status >= 500) console.error(error)
-    res.status(status).json({ error: { code: error.code ?? (status === 400 ? 'INVALID_JSON' : 'INTERNAL_ERROR'), message: status === 500 ? '服务器暂时开了个小差' : error.message } })
+    if (status >= 500) observability.error(error, req)
+    res.status(status).json({ requestId: req.requestId, error: { code: error.code ?? (status === 400 ? 'INVALID_JSON' : 'INTERNAL_ERROR'), message: status === 500 ? '服务器暂时开了个小差' : error.message } })
   })
   return app
 }

@@ -21,9 +21,37 @@ export const apiMock = {
   deleteMemory: vi.fn(async () => undefined),
   activateTrial: vi.fn(async () => memberships.pro),
   submitFeedback: vi.fn(async () => ({ id: 'feedback-1', createdAt: new Date().toISOString() })),
+  loginWithProvider: vi.fn(async () => ({ userId: 'user-1', accessToken: 'access', refreshToken: 'refresh', expiresIn: 900 })),
+  refreshSession: vi.fn(async () => undefined),
+  logout: vi.fn(async () => undefined),
+  acceptConsent: vi.fn(async () => ({ id: 'consent-1' })),
+  createDataExport: vi.fn(async () => ({ id: 'export-1', downloadToken: 'token', expiresAt: new Date().toISOString() })),
+  requestAccountDeletion: vi.fn(async () => ({ status: 'deletion_pending', deleteAfter: new Date().toISOString() })),
+  cancelAccountDeletion: vi.fn(async () => ({ status: 'active' })),
+  favoriteMessage: vi.fn(async (messageId) => ({ id: `favorite-${messageId}`, targetId: messageId })),
+  deleteFavorite: vi.fn(async () => undefined),
+  getFavorites: vi.fn(async () => []),
+  updateProfile: vi.fn(async (profile) => ({ ...profile, streakDays: 7, preferredCompanionId: 'mika' })),
+  getReview: vi.fn(async () => []),
+  getEntitlements: vi.fn(async () => ({ plan: 'free', capabilities: { daily_chat: { enabled: true, limit: 20, used: 0, remaining: 20, resetAt: null } } })),
+  createPaymentOrder: vi.fn(async () => ({ id: 'order-1', status: 'pending', amount: 1800, currency: 'CNY' })),
+  getPaymentOrder: vi.fn(async () => ({ id: 'order-1', status: 'pending', amount: 1800, currency: 'CNY' })),
+  registerNotificationDevice: vi.fn(async () => ({ id: 'device-1' })),
+  authorizeNotification: vi.fn(async () => ({ status: 'authorized' })),
+  getReminders: vi.fn(async () => []),
+  createReminder: vi.fn(async (input) => ({ id: 'reminder-1', ...input, nextDeliveryAt: new Date().toISOString() })),
+  deleteReminder: vi.fn(async () => undefined),
 }
 
-vi.mock('@/services/api', () => ({ api: apiMock, ApiError: class ApiError extends Error {} }))
+vi.mock('@/services/api', () => ({
+  api: apiMock,
+  setSession: vi.fn(),
+  clearSession: vi.fn(),
+  hasStoredSession: vi.fn(() => false),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) { super(message) }
+  },
+}))
 
 afterEach(() => {
   localStorage.clear()

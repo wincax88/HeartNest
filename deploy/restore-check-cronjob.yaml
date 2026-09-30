@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: heartnest-restore-check, namespace: ns-i61rahoe }
+spec:
+  schedule: "43 3 * * 0"
+  timeZone: Asia/Shanghai
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 4
+  failedJobsHistoryLimit: 8
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          imagePullSecrets: [{ name: heartnest-registry }]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: restore-check
+              image: __BACKUP_IMAGE__
+              command: [sh, -ec]
+              args:
+                - |
+                  source="$(find /backups -type f -name 'heartnest-*.dump.enc' -print | sort | tail -n 1)"
+                  test -n "$source" && test -s "$source"
+                  sha256sum -c "${source}.sha256"
+                  database="heartnest_restore_$(date -u +%Y%m%d%H%M%S)"
+                  base="${DATABASE_URL%/*}"
+                  restore_url="${base}/${database}"
+                  cleanup() { psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${database} WITH (FORCE)"; rm -f /tmp/restore.dump; }
+                  trap cleanup EXIT
+                  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${database}"
+                  openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$source" -out /tmp/restore.dump
+                  pg_restore --exit-on-error --no-owner --dbname="$restore_url" /tmp/restore.dump
+                  psql "$restore_url" -v ON_ERROR_STOP=1 -Atc "SELECT (SELECT count(*) >= 0 FROM users) AND (SELECT count(*) >= 0 FROM messages) AND (SELECT count(*) >= 0 FROM audit_events);" | grep -q '^t$'
+                  printf '{"status":"ok","source":"%s","checkedAt":"%s"}\n' "$(basename "$source")" "$(date -u +%FT%TZ)" | tee /backups/latest-restore-status.json
+              env:
+                - name: DATABASE_URL
+                  valueFrom: { secretKeyRef: { name: heartnest-runtime, key: DATABASE_URL } }
+                - name: BACKUP_ENCRYPTION_KEY
+                  valueFrom: { secretKeyRef: { name: heartnest-backup, key: BACKUP_ENCRYPTION_KEY } }
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { cpu: 500m, memory: 512Mi }
+              volumeMounts:
+                - { name: backups, mountPath: /backups }
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - { name: backups, persistentVolumeClaim: { claimName: heartnest-backups } }
+            - { name: tmp, emptyDir: {} }

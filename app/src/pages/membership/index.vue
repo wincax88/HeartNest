@@ -3,19 +3,22 @@ import HnAppHeader from '@/components/HnAppHeader.vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
 import { useProfileStore } from '@/stores/profile'
 import { useBootstrapStore } from '@/stores/bootstrap'
+import { useMembershipStore } from '@/stores/membership'
 import { onMounted } from 'vue'
 
 const profileStore = useProfileStore()
 const bootstrapStore = useBootstrapStore()
-onMounted(() => bootstrapStore.initialize().catch(showError))
+const membershipStore = useMembershipStore()
+onMounted(async () => {
+  try { await bootstrapStore.initialize(); membershipStore.hydrate(profileStore.membership); await membershipStore.load() }
+  catch (error) { showError(error) }
+})
 
 function showError(error: unknown) {
   uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
 }
 
-function activateTrial() {
-  profileStore.activateTrial().catch(showError)
-}
+function purchase() { membershipStore.purchase('heartnest-pro-monthly').catch(showError) }
 const benefits = [
   { icon: 'chatboxes-filled', title: '无限对话', copy: '不打断每一次想说话的时刻' },
   { icon: 'heart-filled', title: '长期记忆', copy: '让重要的片段被更久地记住' },
@@ -53,20 +56,20 @@ function goBack() {
           </view>
         </view>
 
-        <view class="price-card" :class="{ 'is-active': profileStore.membership.tier === 'pro' }">
-          <view><text>{{ profileStore.membership.tier === 'pro' ? '心栖试用会员已开启' : '7 天免费试用' }}</text><text>{{ profileStore.membership.tier === 'pro' ? '试用权益已保存到你的设备记录' : '无需付款，不会自动续费' }}</text></view>
-          <view v-if="profileStore.membership.tier !== 'pro'" class="price"><text>¥</text><text>0</text><text>/7天</text></view>
+        <view class="price-card" :class="{ 'is-active': membershipStore.membership.tier === 'pro' }">
+          <view><text>{{ membershipStore.membership.tier === 'pro' ? '心栖会员已开启' : '心栖月度会员' }}</text><text>{{ membershipStore.order?.status === 'confirming' ? '等待微信支付确认，以回调结果为准' : '支付成功后才会开通，不做本地假激活' }}</text></view>
+          <view v-if="membershipStore.membership.tier !== 'pro'" class="price"><text>¥</text><text>18</text><text>/月</text></view>
           <uni-icons v-else type="checkbox-filled" :size="34" color="#74e3ae" />
         </view>
 
         <HnPrimaryButton
           data-testid="upgrade-membership"
-          :label="profileStore.membership.tier === 'pro' ? '已解锁心栖试用' : '开启 7 天免费试用'"
-          :disabled="profileStore.membership.tier === 'pro'"
+          :label="membershipStore.membership.tier === 'pro' ? '已解锁心栖会员' : (membershipStore.order?.status === 'confirming' ? '等待支付确认' : '微信支付 ¥18')"
+          :disabled="membershipStore.membership.tier === 'pro' || membershipStore.loading || membershipStore.order?.status === 'confirming'"
           icon="vip-filled"
-          @click="activateTrial"
+          @click="purchase"
         />
-        <text class="member-note">试用不会产生扣费，也不会自动转为付费会员</text>
+        <text class="member-note">会员只在服务端收到并验证微信支付回调后生效</text>
       </view>
     </scroll-view>
   </view>

@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heartnest
+  namespace: ns-i61rahoe
+  labels: { app.kubernetes.io/name: heartnest, app.kubernetes.io/part-of: heartnest }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app.kubernetes.io/name: heartnest }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: heartnest, app.kubernetes.io/part-of: heartnest }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+    spec:
+      imagePullSecrets: [{ name: heartnest-registry }]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: heartnest
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8080 }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          env:
+            - { name: NODE_ENV, value: production }
+            - { name: PORT, value: "8080" }
+            - { name: HEARTNEST_STATIC_ROOT, value: /app/public }
+            - { name: HEARTNEST_DATA_FILE, value: /tmp/heartnest.json }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: heartnest-runtime, key: DATABASE_URL } }
+            - name: TOKEN_SIGNING_KEY
+              valueFrom: { secretKeyRef: { name: heartnest-runtime, key: TOKEN_SIGNING_KEY } }
+            - name: DATA_ENCRYPTION_KEY
+              valueFrom: { secretKeyRef: { name: heartnest-runtime, key: DATA_ENCRYPTION_KEY } }
+            - name: DEEPSEEK_API_KEY
+              valueFrom: { secretKeyRef: { name: heartnest-ai, key: DEEPSEEK_API_KEY } }
+          envFrom:
+            - secretRef: { name: heartnest-runtime }
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: heartnest, namespace: ns-i61rahoe }
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: heartnest }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: heartnest, namespace: ns-i61rahoe }
+spec:
+  selector: { app.kubernetes.io/name: heartnest }
+  ports: [{ name: http, port: 80, targetPort: http }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: heartnest
+  namespace: ns-i61rahoe
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [heartnest-ns-i61rahoe.gzg.sealos.run]
+      secretName: wildcard-cert
+  rules:
+    - host: heartnest-ns-i61rahoe.gzg.sealos.run
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: heartnest, port: { number: 80 } } }

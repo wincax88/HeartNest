@@ -1,143 +1,140 @@
 name: 部署 HeartNest 到 Sealos
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - app/**
-      - deploy/**
-      - .github/workflows/deploy-sealos.yml
   workflow_dispatch:
+    inputs:
+      confirm_release:
+        description: 已确认生产发布检查清单
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
-  group: heartnest-sealos
+  group: heartnest-sealos-production
   cancel-in-progress: false
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+env:
+  NAMESPACE: ns-i61rahoe
+  PUBLIC_URL: https://heartnest-ns-i61rahoe.gzg.sealos.run
+  IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/heartnest
 
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
+jobs:
+  release:
+    if: inputs.confirm_release == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: heartnest-production
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: test, POSTGRES_DB: heartnest_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heartnest_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: 测试并构建 H5
+      - name: 测试全部产品链路
         working-directory: app
+        env:
+          DATABASE_URL: postgres://postgres:test@127.0.0.1:5432/heartnest_test
         run: |
           npm ci
           npm test
+          npm run test:integration
+          npm run test:e2e
           npm run type-check
           npm run build:h5
+          npx playwright install --with-deps chromium
+          npm run test:a11y
+          npm run build:mp-weixin
+          npm run build:app
 
-      - name: 安装 API 生产依赖
-        run: npm ci --omit=dev --prefix app/server
-
-      - name: 打包不可变版本
-        shell: bash
-        run: |
-          set -euo pipefail
-          release_root="$RUNNER_TEMP/heartnest-release"
-          release_dir="$release_root/$GITHUB_SHA"
-          mkdir -p "$release_dir/server" "$release_dir/public"
-          cp app/server/*.mjs app/server/package.json "$release_dir/server/"
-          cp -a app/server/node_modules "$release_dir/server/"
-          cp -a app/dist/build/h5/. "$release_dir/public/"
-          tar -czf "$RUNNER_TEMP/heartnest-release-$GITHUB_SHA.tgz" -C "$release_root" "$GITHUB_SHA"
-
-      - name: 安装 kubectl
-        uses: azure/setup-kubectl@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: 构建并推送不可变镜像
+        id: image
+        uses: docker/build-push-action@v6
         with:
-          version: v1.29.15
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: 构建并推送备份工具镜像
+        id: backup_image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/backup.Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_REPOSITORY }}-backup:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: 准备私密配置
-        shell: bash
+      - uses: azure/setup-kubectl@v4
+        with: { version: v1.29.15 }
+      - name: 准备集群访问和运行密钥
         env:
           HEARTNEST_KUBECONFIG: ${{ secrets.HEARTNEST_KUBECONFIG }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER }}
+          RUNTIME_ENV: ${{ secrets.HEARTNEST_RUNTIME_ENV }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
-          if [[ -z "$HEARTNEST_KUBECONFIG" || -z "$DEEPSEEK_API_KEY" ]]; then
-            echo '缺少 HEARTNEST_KUBECONFIG 或 DEEPSEEK_API_KEY 仓库 Secret。' >&2
+          umask 077
+          test -n "$HEARTNEST_KUBECONFIG" && test -n "$GHCR_PULL_TOKEN" && test -n "$GHCR_PULL_USER" && test -n "$RUNTIME_ENV" && test -n "$DEEPSEEK_API_KEY" && test -n "$BACKUP_ENCRYPTION_KEY"
+          printf '%s' "$HEARTNEST_KUBECONFIG" > "$RUNNER_TEMP/kubeconfig"
+          printf '%s' "$RUNTIME_ENV" > "$RUNNER_TEMP/runtime.env"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+          image="${IMAGE_REPOSITORY}@${{ steps.image.outputs.digest }}"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          backup_image="${IMAGE_REPOSITORY}-backup@${{ steps.backup_image.outputs.digest }}"
+          echo "BACKUP_IMAGE=$backup_image" >> "$GITHUB_ENV"
+          kubectl -n "$NAMESPACE" create secret docker-registry heartnest-registry --docker-server=ghcr.io --docker-username="$GHCR_PULL_USER" --docker-password="$GHCR_PULL_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret generic heartnest-runtime --from-env-file="$RUNNER_TEMP/runtime.env" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret generic heartnest-ai --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret generic heartnest-backup --from-literal=BACKUP_ENCRYPTION_KEY="$BACKUP_ENCRYPTION_KEY" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: 迁移数据库
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" apply -f deploy/postgres.yaml
+          kubectl -n "$NAMESPACE" rollout status statefulset/heartnest-postgres --timeout=240s
+          sed "s|__IMAGE__|$IMAGE|g" deploy/migrate-job.yaml > "$RUNNER_TEMP/migrate.yaml"
+          kubectl -n "$NAMESPACE" delete job heartnest-db-migrate --ignore-not-found --wait=true
+          kubectl apply -f "$RUNNER_TEMP/migrate.yaml"
+          kubectl -n "$NAMESPACE" wait --for=condition=Complete job/heartnest-db-migrate --timeout=300s
+          sed "s|__BACKUP_IMAGE__|$BACKUP_IMAGE|g" deploy/backup-cronjob.yaml > "$RUNNER_TEMP/backup.yaml"
+          sed "s|__BACKUP_IMAGE__|$BACKUP_IMAGE|g" deploy/restore-check-cronjob.yaml > "$RUNNER_TEMP/restore-check.yaml"
+          kubectl apply -f "$RUNNER_TEMP/backup.yaml" -f "$RUNNER_TEMP/restore-check.yaml"
+
+      - name: 滚动发布并业务冒烟
+        run: |
+          set -euo pipefail
+          sed "s|__IMAGE__|$IMAGE|g" deploy/app.yaml > "$RUNNER_TEMP/app.yaml"
+          kubectl apply -f "$RUNNER_TEMP/app.yaml"
+          if ! kubectl -n "$NAMESPACE" rollout status deployment/heartnest --timeout=300s; then
+            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest
             exit 1
           fi
-          umask 077
-          printf '%s' "$HEARTNEST_KUBECONFIG" > "$RUNNER_TEMP/heartnest-kubeconfig"
-          printf '%s' "$DEEPSEEK_API_KEY" > "$RUNNER_TEMP/heartnest-deepseek-key"
-          printf 'KUBECONFIG=%s\n' "$RUNNER_TEMP/heartnest-kubeconfig" >> "$GITHUB_ENV"
-
-      - name: 校验部署目标
-        shell: bash
-        run: |
-          set -euo pipefail
-          namespace="$(kubectl config view --minify -o jsonpath='{..namespace}')"
-          api_server="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
-          [[ "$namespace" == 'ns-i61rahoe' ]] || { echo 'kubeconfig 命名空间不匹配。' >&2; exit 1; }
-          [[ "$api_server" == 'https://gzg.sealos.run:6443' ]] || { echo 'kubeconfig 集群地址不匹配。' >&2; exit 1; }
-          kubectl -n ns-i61rahoe get pvc heartnest-web
-
-      - name: 更新 DeepSeek 集群密钥
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl -n ns-i61rahoe create secret generic heartnest-ai \
-            --from-file=DEEPSEEK_API_KEY="$RUNNER_TEMP/heartnest-deepseek-key" \
-            --dry-run=client -o yaml | kubectl -n ns-i61rahoe apply -f -
-
-      - name: 上传版本到现有 PVC
-        shell: bash
-        run: |
-          set -euo pipefail
-          upload_node="$(kubectl -n ns-i61rahoe get pods \
-            -l app.kubernetes.io/name=heartnest-web \
-            --field-selector=status.phase=Running \
-            -o jsonpath='{.items[0].spec.nodeName}')"
-          [[ -n "$upload_node" ]] || { echo '找不到正在运行的 HeartNest 节点。' >&2; exit 1; }
-          sed "s/__UPLOAD_NODE__/$upload_node/g" deploy/actions-uploader.yaml > "$RUNNER_TEMP/heartnest-uploader.yaml"
-          kubectl -n ns-i61rahoe apply -f "$RUNNER_TEMP/heartnest-uploader.yaml"
-          trap 'kubectl -n ns-i61rahoe delete pod heartnest-actions-uploader --ignore-not-found --wait=true' EXIT
-          kubectl -n ns-i61rahoe wait --for=condition=Ready pod/heartnest-actions-uploader --timeout=180s
-          kubectl -n ns-i61rahoe exec heartnest-actions-uploader -- mkdir -p /site/releases /site/data
-          kubectl -n ns-i61rahoe cp "$RUNNER_TEMP/heartnest-release-$GITHUB_SHA.tgz" \
-            "heartnest-actions-uploader:/site/heartnest-release-$GITHUB_SHA.tgz"
-          kubectl -n ns-i61rahoe exec heartnest-actions-uploader -- \
-            tar -xzf "/site/heartnest-release-$GITHUB_SHA.tgz" -C /site/releases
-          kubectl -n ns-i61rahoe exec heartnest-actions-uploader -- \
-            rm "/site/heartnest-release-$GITHUB_SHA.tgz"
-          kubectl -n ns-i61rahoe exec heartnest-actions-uploader -- \
-            test -f "/site/releases/$GITHUB_SHA/server/index.mjs"
-
-      - name: 切换到新版本
-        shell: bash
-        run: |
-          set -euo pipefail
-          sed -e "s/__RELEASE_SHA__/$GITHUB_SHA/g" \
-            -e "s/__DEPLOY_RUN__/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/g" \
-            deploy/workload-actions.yaml > "$RUNNER_TEMP/heartnest-workload.yaml"
-          kubectl -n ns-i61rahoe apply -f "$RUNNER_TEMP/heartnest-workload.yaml"
-          kubectl -n ns-i61rahoe rollout status deployment/heartnest-web --timeout=240s
-
-      - name: 验证公网 API
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in {1..10}; do
-            response="$(curl --fail --show-error --silent --connect-timeout 5 --max-time 10 \
-              https://heartnest-ns-i61rahoe.gzg.sealos.run/api/health || true)"
-            if jq -e '.ok == true' <<< "$response" > /dev/null 2>&1; then
-              echo '公网 API 健康检查通过。'
-              exit 0
-            fi
-            sleep 3
-          done
-          echo '公网 API 健康检查失败。' >&2
-          exit 1
+          if ! curl --fail --show-error --silent --retry 5 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true'; then
+            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest
+            kubectl -n "$NAMESPACE" rollout status deployment/heartnest --timeout=240s
+            exit 1
+          fi

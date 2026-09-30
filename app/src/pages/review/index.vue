@@ -1,19 +1,36 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import HnBottomNav from '@/components/HnBottomNav.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
+import HnAsyncState from '@/components/HnAsyncState.vue'
 import { useReviewStore } from '@/stores/review'
 import { useBootstrapStore } from '@/stores/bootstrap'
+import { api } from '@/services/api'
 
 const reviewStore = useReviewStore()
 const bootstrapStore = useBootstrapStore()
+const filterFrom = ref('2026-09-01')
+const filterTo = ref('2026-09-30')
+const filterMood = ref('')
+const filteredCount = ref<number | null>(null)
 const hasRecords = computed(() => reviewStore.reviewDays.some((day) => day.recorded))
 const heights = computed(() => reviewStore.reviewDays.map((day) => day.score ? 14 + day.score * 16 : 4))
 const dateRange = computed(() => {
   const days = reviewStore.reviewDays
   return days.length ? `${days[0].date} — ${days.at(-1)?.date}` : '--'
 })
+const trendSummary = computed(() => {
+  const recorded = reviewStore.reviewDays.filter((day) => day.recorded)
+  if (!recorded.length) return '近 7 天暂无情绪记录。'
+  const average = recorded.reduce((sum, day) => sum + day.score, 0) / recorded.length
+  return `近 7 天记录了 ${recorded.length} 天，平均情绪强度 ${average.toFixed(1)} 分。`
+})
 onMounted(() => bootstrapStore.initialize(true).catch((error) => uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })))
+
+async function applyFilters() {
+  try { filteredCount.value = (await api.getReview({ from: filterFrom.value, to: filterTo.value, mood: filterMood.value || undefined })).length }
+  catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '筛选失败', icon: 'none' }) }
+}
 
 function navigate(destination: string) {
   const routes: Record<string, string> = {
@@ -21,11 +38,13 @@ function navigate(destination: string) {
   }
   uni.reLaunch({ url: routes[destination] })
 }
+
+function goHome() { uni.reLaunch({ url: '/pages/home/index' }) }
 </script>
 
 <template>
   <view class="hn-screen">
-    <image class="hn-night-bg" src="/static/heartnest/night-cat.jpg" mode="aspectFill" />
+    <image class="hn-night-bg" src="/static/heartnest/night-cat.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="hn-night-shade" />
     <scroll-view scroll-y class="review-scroll">
       <view class="hn-page review-page">
@@ -33,14 +52,25 @@ function navigate(destination: string) {
           <view><text class="eyebrow">WEEKLY REVIEW</text><text class="title">情绪回顾</text></view>
           <view class="calendar-chip"><uni-icons type="calendar" :size="20" color="#e5d4ff" /><text>{{ dateRange }}</text></view>
         </view>
+        <view class="review-filters">
+          <picker mode="date" :value="filterFrom" @change="filterFrom = $event.detail.value"><view>从 {{ filterFrom }}</view></picker>
+          <picker mode="date" :value="filterTo" @change="filterTo = $event.detail.value"><view>到 {{ filterTo }}</view></picker>
+          <picker :range="['全部情绪', '平静', '难过']" @change="filterMood = ['', 'calm', 'sad'][$event.detail.value]"><view>{{ filterMood || '全部情绪' }}</view></picker>
+          <button data-testid="apply-review-filter" @click="applyFilters">筛选</button>
+        </view>
+        <text v-if="filteredCount !== null" class="filter-result">筛选到 {{ filteredCount }} 条情绪记录</text>
 
         <HnGlassCard class="trend-card">
           <view class="trend-copy"><text>{{ hasRecords ? '这是你近七天的真实记录' : '这一周还没有记录' }}</text><text>{{ hasRecords ? '每一次选择的情绪都会在这里留下轨迹。' : '去首页选择此刻的感受，从今天开始。' }}</text></view>
+          <text data-testid="review-summary" class="sr-only">{{ trendSummary }}</text>
           <view class="chart">
             <view v-for="(day, index) in reviewStore.reviewDays" :key="day.date" data-testid="review-day" class="chart-day">
               <view class="chart-track"><view class="chart-bar" :class="{ 'chart-bar--empty': !day.recorded }" :style="{ height: `${heights[index]}%` }"><view class="chart-dot" /></view></view>
               <text class="chart-weekday">{{ day.weekday.slice(1) }}</text>
             </view>
+          </view>
+          <view class="sr-only" role="list" aria-label="近七天情绪数据">
+            <text v-for="day in reviewStore.reviewDays" :key="`row-${day.date}`" data-testid="review-data-row" role="listitem">{{ day.date }}，{{ day.recorded ? `情绪强度 ${day.score} 分` : '无记录' }}</text>
           </view>
           <view class="trend-footer"><uni-icons type="heart-filled" :size="18" color="#ffb6d7" /><text>{{ hasRecords ? '数据来自你的每日情绪选择' : '暂无可比较的记录' }}</text></view>
         </HnGlassCard>
@@ -54,7 +84,7 @@ function navigate(destination: string) {
           </HnGlassCard>
         </view>
 
-        <HnGlassCard v-if="reviewStore.memories.length === 0" class="empty-card">你主动记住的对话片段会出现在这里。</HnGlassCard>
+        <HnAsyncState v-if="reviewStore.memories.length === 0" data-testid="review-empty" state="empty" title="还没有被记住的片段" description="去首页选择心情并开始一次对话。" action-label="回到首页" @action="goHome" />
 
       </view>
     </scroll-view>
@@ -66,6 +96,7 @@ function navigate(destination: string) {
 .review-scroll { height: 100vh; }
 .review-page { padding-bottom: calc(210rpx + env(safe-area-inset-bottom)); }
 .review-header { display: flex; align-items: flex-end; justify-content: space-between; margin: 18rpx 0 38rpx; }
+.review-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; margin-bottom: 18rpx; }.review-filters view,.review-filters button { padding: 16rpx; border-radius: 18rpx; color: #cbd2e7; font-size: 19rpx; background: rgba(38,45,88,.7); }.filter-result { display:block; margin-bottom:18rpx; color:#aeb7d2; font-size:19rpx; }
 .review-header > view:first-child { display: flex; flex-direction: column; gap: 5rpx; }
 .eyebrow { color: #dc9dca; font-size: 18rpx; font-weight: 700; letter-spacing: 5rpx; }
 .title { font-family: Georgia, 'Songti SC', serif; font-size: 52rpx; font-weight: 700; }

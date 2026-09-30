@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
-import { useAppStore } from '@/stores/app'
 
-const appStore = useAppStore()
 const current = ref(0)
 const slides = [
   { title: '让情绪有处安放', copy: '一个懂你的关系型 AI 空间，陪你倾诉、整理、回顾情绪。' },
@@ -11,16 +9,14 @@ const slides = [
   { title: '记住重要的片段', copy: '所有记忆都由你掌控，让每一次陪伴更有温度。' },
 ]
 
-async function enter() {
-  try { await appStore.completeOnboarding() }
-  catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '无法保存状态', icon: 'none' }); return }
-  uni.reLaunch({ url: '/pages/home/index' })
+function enter() {
+  uni.navigateTo({ url: '/pages/consent/index' })
 }
 </script>
 
 <template>
   <view class="hn-screen onboarding">
-    <image class="onboarding__bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" />
+    <image class="onboarding__bg" src="/static/heartnest/onboarding-night.jpg" mode="aspectFill" aria-hidden="true" />
     <view class="onboarding__shade" />
     <view class="onboarding__brand"><uni-icons type="heart-filled" :size="27" color="#ffd2dc" /><view><text>心栖</text><text>HeartNest</text></view></view>
     <swiper class="onboarding__swiper" :current="current" @change="current = $event.detail.current">
