@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Companion } from '@/domain/models'
+import HnAction from './HnAction.vue'
 
 defineProps<{ companion: Companion; featured?: boolean }>()
 const emit = defineEmits<{ select: [] }>()
 </script>
 
 <template>
-  <button class="companion-card" :class="{ 'is-featured': featured }" @click="emit('select')">
+  <HnAction :label="`选择陪伴者 ${companion.chineseName}`" class="companion-card" :class="{ 'is-featured': featured }" @activate="emit('select')">
     <image class="companion-card__image" :src="companion.cardImage" mode="aspectFill" />
     <view class="companion-card__shade" />
     <view v-if="featured" class="companion-card__badge"><uni-icons type="star-filled" :size="14" color="#5d3c62" /> 为你推荐</view>
@@ -15,7 +16,7 @@ const emit = defineEmits<{ select: [] }>()
       <text class="companion-card__tagline">「{{ companion.tagline }}」</text>
       <view class="companion-card__traits"><text v-for="trait in companion.traits.slice(0, 2)" :key="trait">{{ trait }}</text></view>
     </view>
-  </button>
+  </HnAction>
 </template>
 
 <style scoped lang="scss">

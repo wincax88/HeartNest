@@ -1,23 +1,27 @@
 <script setup lang="ts">
 import type { MoodId, MoodOption } from '@/domain/models'
+import HnAction from './HnAction.vue'
 
 defineProps<{ items: MoodOption[]; modelValue: MoodId }>()
 const emit = defineEmits<{ 'update:modelValue': [moodId: MoodId] }>()
 </script>
 
 <template>
-  <view class="mood-grid">
-    <button
+  <view class="mood-grid" role="radiogroup" aria-label="此刻心情">
+    <HnAction
       v-for="item in items"
       :key="item.id"
       :data-testid="`mood-${item.id}`"
       class="mood-item"
       :class="{ 'is-selected': item.id === modelValue }"
-      @click="emit('update:modelValue', item.id)"
+      role="radio"
+      :label="item.title"
+      :checked="item.id === modelValue"
+      @activate="emit('update:modelValue', item.id)"
     >
       <view class="mood-item__icon"><uni-icons :type="item.icon" :size="28" color="#e9ddff" /></view>
       <text>{{ item.title }}</text>
-    </button>
+    </HnAction>
   </view>
 </template>
 

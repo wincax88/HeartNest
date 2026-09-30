@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import HnAction from './HnAction.vue'
 type Destination = 'home' | 'companions' | 'review' | 'profile'
 
 defineProps<{ active: Destination }>()
@@ -13,18 +14,21 @@ const items: Array<{ id: Destination; label: string; icon: string }> = [
 </script>
 
 <template>
-  <view class="bottom-nav">
-    <view
+  <view class="bottom-nav" role="tablist" aria-label="主导航">
+    <HnAction
       v-for="item in items"
       :key="item.id"
       :data-testid="`nav-${item.id}`"
       class="bottom-nav__item"
       :class="{ 'is-active': active === item.id }"
-      @click="emit('navigate', item.id)"
+      role="tab"
+      :label="item.label"
+      :selected="active === item.id"
+      @activate="emit('navigate', item.id)"
     >
       <uni-icons :type="item.icon" :size="25" :color="active === item.id ? '#efabff' : '#c2cae8'" />
       <text>{{ item.label }}</text>
-    </view>
+    </HnAction>
   </view>
 </template>
 
@@ -54,6 +58,7 @@ const items: Array<{ id: Destination; label: string; icon: string }> = [
   gap: 4rpx;
   color: #c2cae8;
   font-size: 22rpx;
+  min-height: 88rpx;
 }
 
 .bottom-nav__item.is-active {
