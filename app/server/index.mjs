@@ -18,6 +18,7 @@ import { createNotificationService } from './notifications/service.mjs'
 import { createNotificationWorker } from './notifications/worker.mjs'
 import { createWechatNotificationAdapter } from './notifications/wechat.mjs'
 import { createAppPushAdapter } from './notifications/app-push.mjs'
+import { createContentService } from './content.mjs'
 import { createSafeResponder } from './safety.mjs'
 import { createStore } from './store.mjs'
 
@@ -50,9 +51,13 @@ const notificationWorker = repositories ? createNotificationWorker({
     app: createAppPushAdapter(config.appPush),
   },
 }) : null
+const contentService = repositories ? createContentService({
+  repositories,
+  avatarOrigins: (process.env.AVATAR_ALLOWED_ORIGINS || 'https://heartnest-ns-i61rahoe.gzg.sealos.run').split(',').map((value) => value.trim()).filter(Boolean),
+}) : null
 const responder = createDeepSeekResponder()
 const safeResponder = createSafeResponder({ responder })
-const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService })
+const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService, contentService })
 const staticRoot = resolve(process.env.HEARTNEST_STATIC_ROOT || './dist/build/h5')
 
 if (notificationWorker) {

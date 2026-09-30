@@ -15,7 +15,7 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
@@ -67,6 +67,21 @@ export function createApi({ store, responder, safeResponder = null, authService 
     app.delete('/api/reminders/:id', route(async (req, res) => {
       await notificationService.deleteSchedule(req.userId, req.params.id)
       res.status(204).end()
+    }))
+  }
+
+  if (contentService) {
+    app.patch('/api/profile', route(async (req, res) => res.json(await contentService.updateProfile(req.userId, req.body || {}))))
+    app.get('/api/favorites', route(async (req, res) => res.json(await contentService.listFavorites(req.userId))))
+    app.post('/api/favorites', route(async (req, res) => {
+      res.status(201).json(await contentService.favoriteMessage(req.userId, req.body?.messageId))
+    }))
+    app.delete('/api/favorites/:id', route(async (req, res) => {
+      await contentService.deleteFavorite(req.userId, req.params.id)
+      res.status(204).end()
+    }))
+    app.get('/api/review', route(async (req, res) => {
+      res.json(await contentService.review(req.userId, { from: req.query.from, to: req.query.to, mood: req.query.mood }))
     }))
   }
 

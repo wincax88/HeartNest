@@ -580,5 +580,63 @@ export function createRepositories(pool) {
         )
       })
     },
+
+    async updateUserProfile(userId, { displayName, avatarUrl }) {
+      const result = await pool.query(
+        `UPDATE users SET display_name = $2, avatar_url = $3, updated_at = now()
+         WHERE id = $1 AND status = 'active' RETURNING *`,
+        [userId, displayName, avatarUrl],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+      return mapUser(result.rows[0])
+    },
+
+    async favoriteMessage(userId, messageId) {
+      const result = await pool.query(
+        `INSERT INTO favorites (user_id, target_type, target_id)
+         SELECT $1, 'message', m.id FROM chat_messages m
+         JOIN chat_threads t ON t.id = m.thread_id
+         WHERE m.id = $2 AND t.user_id = $1
+         ON CONFLICT (user_id, target_type, target_id) DO UPDATE SET target_id = EXCLUDED.target_id
+         RETURNING id, target_id, created_at`,
+        [userId, messageId],
+      )
+      if (!result.rowCount) throw Object.assign(new Error('消息不存在'), { status: 404, code: 'MESSAGE_NOT_FOUND' })
+      const row = result.rows[0]
+      return { id: row.id, targetType: 'message', targetId: row.target_id, createdAt: row.created_at.toISOString() }
+    },
+
+    async listFavorites(userId) {
+      const result = await pool.query(
+        `SELECT f.id, f.target_id, f.created_at, m.content, m.sender, m.created_at AS message_created_at, t.companion_id
+         FROM favorites f
+         JOIN chat_messages m ON m.id = f.target_id
+         JOIN chat_threads t ON t.id = m.thread_id AND t.user_id = f.user_id
+         WHERE f.user_id = $1 AND f.target_type = 'message'
+         ORDER BY f.created_at DESC`,
+        [userId],
+      )
+      return result.rows.map((row) => ({
+        id: row.id, targetType: 'message', targetId: row.target_id, content: row.content,
+        sender: row.sender, companionId: row.companion_id, messageCreatedAt: row.message_created_at.toISOString(), createdAt: row.created_at.toISOString(),
+      }))
+    },
+
+    async deleteFavorite(userId, favoriteId) {
+      const result = await pool.query('DELETE FROM favorites WHERE id = $1 AND user_id = $2', [favoriteId, userId])
+      if (!result.rowCount) throw Object.assign(new Error('收藏不存在'), { status: 404, code: 'FAVORITE_NOT_FOUND' })
+    },
+
+    async reviewMoodRecords(userId, { from, to, mood }) {
+      const result = await pool.query(
+        `SELECT id, mood_id, summary, recorded_at
+         FROM mood_records
+         WHERE user_id = $1 AND recorded_at >= $2::date AND recorded_at < ($3::date + interval '1 day')
+           AND ($4::text IS NULL OR mood_id = $4)
+         ORDER BY recorded_at`,
+        [userId, from, to, mood],
+      )
+      return result.rows.map((row) => ({ id: row.id, moodId: row.mood_id, summary: row.summary, recordedAt: row.recorded_at.toISOString() }))
+    },
   }
 }
