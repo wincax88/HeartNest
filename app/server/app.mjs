@@ -15,7 +15,7 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null, repositories = null }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
@@ -223,6 +223,7 @@ export function createApi({ store, responder, safeResponder = null, authService 
     const quota = entitlementService
       ? await entitlementService.consume(req.userId, 'daily_chat', { referenceId: clientMessageId })
       : null
+    if (repositories) await repositories.insertMessage(req.userId, companionId, { clientMessageId, content: text.trim() })
 
     const context = await store.update(req.deviceId, (user) => {
       const thread = store.findThread(user, companionId)
@@ -252,12 +253,16 @@ export function createApi({ store, responder, safeResponder = null, authService 
         }
         return { threadId: thread.id, userMessage, companionMessage, quota }
       })
-      res.status(201).json(result)
+      const persisted = repositories
+        ? await repositories.completeChatExchange(req.userId, companionId, { clientMessageId, companionContent: response.content, riskLevel: response.riskLevel })
+        : null
+      res.status(201).json(persisted ? { threadId: result.threadId, ...persisted, quota } : result)
     } catch (error) {
       await store.update(req.deviceId, (user) => {
         const message = store.findThread(user, companionId).messages.find((item) => item.id === clientMessageId)
         if (message) message.status = 'failed'
       })
+      if (repositories) await repositories.markChatMessageFailed(req.userId, companionId, clientMessageId)
       throw error
     }
   }))

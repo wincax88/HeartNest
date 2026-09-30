@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useChatStore } from '@/stores/chat'
 import { apiMock } from '../setup'
+import type { ChatMessage } from '@/domain/models'
 
 describe('chat store', () => {
   beforeEach(() => {
@@ -37,5 +38,17 @@ describe('chat store', () => {
 
     expect(store.messages[0].status).toBe('failed')
     expect(store.isReplying).toBe(false)
+  })
+
+  it('retries a failed message with the original client id in place', async () => {
+    const store = useChatStore()
+    const failed = { id: 'user-fixed', sender: 'user', content: '重试我', createdAt: new Date().toISOString(), status: 'failed' } as ChatMessage
+    store.messages = [failed]
+
+    await store.retry(failed)
+
+    expect(apiMock.sendMessage).toHaveBeenCalledWith('mika', expect.objectContaining({ clientMessageId: 'user-fixed' }))
+    expect(store.messages.filter((message) => message.id === 'user-fixed')).toHaveLength(1)
+    expect(store.messages[0].status).toBe('sent')
   })
 })

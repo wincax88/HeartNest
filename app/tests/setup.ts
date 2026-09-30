@@ -28,6 +28,8 @@ export const apiMock = {
   createDataExport: vi.fn(async () => ({ id: 'export-1', downloadToken: 'token', expiresAt: new Date().toISOString() })),
   requestAccountDeletion: vi.fn(async () => ({ status: 'deletion_pending', deleteAfter: new Date().toISOString() })),
   cancelAccountDeletion: vi.fn(async () => ({ status: 'active' })),
+  favoriteMessage: vi.fn(async (messageId) => ({ id: `favorite-${messageId}`, targetId: messageId })),
+  deleteFavorite: vi.fn(async () => undefined),
 }
 
 vi.mock('@/services/api', () => ({

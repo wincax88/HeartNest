@@ -275,7 +275,8 @@ export function createRepositories(pool) {
           if (existing.rows[0].content !== content) {
             throw domainError('MESSAGE_ID_CONFLICT', '消息标识已用于不同内容')
           }
-          return mapMessage(existing.rows[0])
+          const retried = await client.query("UPDATE chat_messages SET status = 'sending', updated_at = now() WHERE id = $1 RETURNING *", [existing.rows[0].id])
+          return mapMessage(retried.rows[0])
         }
 
         const inserted = await client.query(
@@ -287,6 +288,37 @@ export function createRepositories(pool) {
         )
         return mapMessage(inserted.rows[0])
       })
+    },
+
+    async completeChatExchange(userId, companionId, { clientMessageId, companionContent, riskLevel = 'normal' }) {
+      return withTransaction(pool, async (client) => {
+        const userMessage = await client.query(
+          `UPDATE chat_messages m SET status = 'sent', risk_level = $4, updated_at = now()
+           FROM chat_threads t
+           WHERE m.thread_id = t.id AND t.user_id = $1 AND t.companion_id = $2 AND m.client_message_id = $3
+           RETURNING m.*`,
+          [userId, companionId, clientMessageId, riskLevel],
+        )
+        if (!userMessage.rowCount) throw domainError('MESSAGE_NOT_FOUND', '消息不存在')
+        const replyClientId = `reply:${clientMessageId}`.slice(0, 100)
+        const companion = await client.query(
+          `INSERT INTO chat_messages (thread_id, client_message_id, sender, content, status, reply_to)
+           VALUES ($1, $2, 'companion', $3, 'sent', $4)
+           ON CONFLICT (thread_id, client_message_id) DO UPDATE SET content = EXCLUDED.content, status = 'sent', updated_at = now()
+           RETURNING *`,
+          [userMessage.rows[0].thread_id, replyClientId, companionContent, userMessage.rows[0].id],
+        )
+        return { userMessage: mapMessage(userMessage.rows[0]), companionMessage: mapMessage(companion.rows[0]) }
+      })
+    },
+
+    async markChatMessageFailed(userId, companionId, clientMessageId) {
+      await pool.query(
+        `UPDATE chat_messages m SET status = 'failed', updated_at = now()
+         FROM chat_threads t
+         WHERE m.thread_id = t.id AND t.user_id = $1 AND t.companion_id = $2 AND m.client_message_id = $3`,
+        [userId, companionId, clientMessageId],
+      )
     },
 
     async entitlementContext(userId, now = new Date()) {

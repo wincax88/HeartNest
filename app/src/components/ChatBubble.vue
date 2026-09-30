@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { ChatMessage } from '@/domain/models'
 
-defineProps<{ message: ChatMessage }>()
-defineEmits<{ retry: [] }>()
+defineProps<{ message: ChatMessage; favorite?: boolean }>()
+defineEmits<{ retry: []; favorite: [] }>()
 </script>
 
 <template>
@@ -15,6 +15,9 @@ defineEmits<{ retry: [] }>()
       <text>{{ message.content }}</text>
       <text v-if="message.status === 'sending'" class="message-status">发送中…</text>
       <text v-else-if="message.status === 'failed'" class="message-status message-status--failed" @click="$emit('retry')">发送失败，点击重试</text>
+      <button v-else-if="message.status === 'sent'" class="favorite-action" :aria-label="favorite ? '取消收藏' : '收藏消息'" @click="$emit('favorite')">
+        {{ favorite ? '★ 已收藏' : '☆ 收藏' }}
+      </button>
     </view>
   </view>
 </template>
@@ -40,4 +43,5 @@ defineEmits<{ retry: [] }>()
 }
 .message-status { display: block; margin-top: 6rpx; color: rgba(255, 255, 255, 0.72); font-size: 18rpx; }
 .message-status--failed { color: #ffd0d8; cursor: pointer; }
+.favorite-action { margin: 8rpx 0 0; padding: 0; color: rgba(255, 255, 255, 0.72); font-size: 18rpx; text-align: left; background: transparent; }
 </style>

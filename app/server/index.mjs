@@ -57,7 +57,7 @@ const contentService = repositories ? createContentService({
 }) : null
 const responder = createDeepSeekResponder()
 const safeResponder = createSafeResponder({ responder })
-const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService, contentService })
+const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService, contentService, repositories })
 const staticRoot = resolve(process.env.HEARTNEST_STATIC_ROOT || './dist/build/h5')
 
 if (notificationWorker) {

@@ -37,13 +37,16 @@ function showError(error: unknown) {
 async function send() {
   const content = draft.value.trim()
   if (!content || chatStore.isReplying) return
-  draft.value = ''
-  try { await chatStore.send(content) } catch (error) { showError(error) }
+  try { await chatStore.send(content); draft.value = '' } catch (error) { showError(error) }
   await nextTick()
 }
 
 function retry(message: ChatMessage) {
   chatStore.retry(message).catch(showError)
+}
+
+function toggleFavorite(message: ChatMessage) {
+  chatStore.toggleFavorite(message).catch(showError)
 }
 
 async function saveMemory() {
@@ -77,7 +80,14 @@ function goBack() {
           <text>{{ companion.name }} 会温柔地听你说，也会尊重你不想继续的话题。</text>
         </view>
 
-        <ChatBubble v-for="message in chatStore.messages" :key="message.id" :message="message" @retry="retry(message)" />
+        <ChatBubble
+          v-for="message in chatStore.messages"
+          :key="message.id"
+          :message="message"
+          :favorite="Boolean(chatStore.favoriteByMessage[message.id])"
+          @retry="retry(message)"
+          @favorite="toggleFavorite(message)"
+        />
         <view v-if="chatStore.isReplying" class="typing-row">
           <view class="typing-dot" /><view class="typing-dot" /><view class="typing-dot" />
           <text>正在回应</text>
