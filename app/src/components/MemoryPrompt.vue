@@ -1,34 +1,30 @@
 <script setup lang="ts">
-defineProps<{ visible?: boolean; saved?: boolean }>()
+defineProps<{ visible?: boolean; saved?: boolean; saving?: boolean; disabled?: boolean; excerpt?: string }>()
 defineEmits<{ save: [] }>()
 </script>
 
 <template>
-  <view v-if="visible" class="memory-prompt">
-    <view class="memory-prompt__icon"><uni-icons type="heart-filled" :size="18" color="#ffd4e4" /></view>
-    <view class="memory-prompt__copy">
-      <text class="memory-prompt__title">要帮你记住这一刻吗？</text>
-      <text class="memory-prompt__text">之后复盘时，你可以再回来看看此刻的心情。</text>
+  <view v-if="visible" data-testid="memory-prompt" class="memory-prompt" :class="{ 'memory-prompt--saved': saved }">
+    <view class="memory-prompt__heading"><uni-icons type="heart-filled" :size="18" color="#f1c2dd" /><text class="memory-prompt__title">{{ saved ? '这句话已记住' : '想记住这句话吗？' }}</text></view>
+    <text v-if="excerpt" class="memory-prompt__excerpt">“{{ excerpt }}”</text>
+    <view class="memory-prompt__footer">
+      <text class="memory-prompt__text">{{ saved ? '可以在「回顾」里再看看。' : '留在回顾里，想起时再看看。' }}</text>
+      <button data-testid="save-memory" class="memory-prompt__action" type="button" role="button" :tabindex="saved || saving || disabled ? -1 : 0" :disabled="saved || saving || disabled" :aria-disabled="saved || saving || disabled" :aria-busy="Boolean(saving)" @click="$emit('save')" @keydown.enter.prevent="$emit('save')" @keydown.space.prevent="$emit('save')">{{ saving ? '保存中…' : (saved ? '已记住' : '记住这句') }}</button>
     </view>
-    <text class="memory-prompt__action" @click="$emit('save')">{{ saved ? '已记住' : '记住' }}</text>
   </view>
 </template>
 
 <style scoped lang="scss">
-.memory-prompt {
-  display: grid;
-  grid-template-columns: 54rpx 1fr auto;
-  align-items: center;
-  gap: 16rpx;
-  margin: 28rpx 0;
-  padding: 20rpx;
-  border: 1rpx solid rgba(236, 145, 204, 0.25);
-  border-radius: 24rpx;
-  background: rgba(45, 48, 91, 0.58);
-}
-.memory-prompt__icon { display: grid; place-items: center; width: 54rpx; height: 54rpx; border-radius: 18rpx; background: rgba(236, 145, 204, 0.18); }
-.memory-prompt__copy { display: flex; flex-direction: column; gap: 5rpx; }
-.memory-prompt__title { color: #f8efff; font-size: 23rpx; font-weight: 700; }
-.memory-prompt__text { color: #aeb7d4; font-size: 19rpx; line-height: 1.45; }
-.memory-prompt__action { color: #ffc1df; font-size: 22rpx; font-weight: 700; }
+@use '@/styles/tokens.scss' as *;
+.memory-prompt { margin: 4px 0 24px; padding: 18px 0 12px; border-top: 1px solid rgba(233, 183, 214, .25); }
+.memory-prompt__heading { display: flex; align-items: center; gap: 8px; }
+.memory-prompt__title { color: #f1deed; font-size: 15px; font-weight: 600; line-height: 1.6; }
+.memory-prompt__excerpt { display: -webkit-box; margin: 10px 0 0; overflow: hidden; color: #c5cde2; font-size: 14px; line-height: 1.7; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
+.memory-prompt__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.memory-prompt__text { flex: 1; min-width: 0; color: #bdc7df; font-size: 14px; line-height: 1.6; }
+.memory-prompt__action { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; min-width: 80px; min-height: 44px; margin: 0; padding: 0 10px; border: 0; border-radius: 10px; color: #f1c2dd; font-size: 14px; font-weight: 600; line-height: 1.4; background: transparent; }
+.memory-prompt__action::after { border: 0; }
+.memory-prompt__action:active { background: rgba(233, 183, 214, .1); }
+.memory-prompt__action:focus-visible { outline: 2px solid $hn-focus; outline-offset: 1px; }
+.memory-prompt__action[disabled] { color: #bdc7df; }
 </style>

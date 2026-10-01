@@ -85,7 +85,13 @@ export const useChatStore = defineStore('chat', {
     async saveLatestMemory() {
       const message = [...this.messages].reverse().find((item) => item.sender === 'user' && item.status === 'sent')
       if (!message) return
-      await api.saveMemory(this.companionId, message.id)
+      const companionId = this.companionId
+      const memory = await api.saveMemory(companionId, message.id)
+      if (companionId === this.companionId) {
+        const saved = this.messages.find(item => item.id === message.id)
+        if (saved) saved.memoryId = memory.id
+      }
+      return memory
     },
   },
 })
