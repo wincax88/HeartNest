@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { loadConfig } from '../../server/config.mjs'
 
 describe('loadConfig', () => {
+  it('only loads a reminder template with valid server-side data', () => {
+    const configuration = { WECHAT_REMINDER_TEMPLATE_ID: 'real-template', WECHAT_REMINDER_TEMPLATE_DATA: '{"thing1":{"value":"温柔提醒"},"time2":{"value":"{{time}}"}}' }
+    expect(loadConfig(configuration).wechatReminder).toEqual({ templateId: 'real-template', data: { thing1: { value: '温柔提醒' }, time2: { value: '{{time}}' } } })
+    for (const invalid of ['not-json', 'null', '{}', '[]', '{"thing1":{"value":42}}']) {
+      expect(loadConfig({ ...configuration, WECHAT_REMINDER_TEMPLATE_DATA: invalid }).wechatReminder.data).toBeNull()
+    }
+  })
   it('rejects production startup without database and token keys', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow('DATABASE_URL')
   })

@@ -56,6 +56,7 @@ foreach ($workflowRequirement in @(
   'heartnest-postgres',
   'POSTGRES_PASSWORD',
   'authMode == "provider"',
+  '.capabilities.avatarUpload == true',
   'heartnest-web'
 )) {
   if ($workflowText -notmatch [regex]::Escape($workflowRequirement)) { throw "Deployment workflow is missing: $workflowRequirement" }

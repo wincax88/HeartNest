@@ -156,14 +156,17 @@ jobs:
           fi
 
           pod="$(kubectl -n "$NAMESPACE" get pod -l app.kubernetes.io/name=heartnest -o jsonpath='{.items[0].metadata.name}')"
-          kubectl -n "$NAMESPACE" exec "$pod" -- node -e '
+          if ! kubectl -n "$NAMESPACE" exec "$pod" -- node -e '
             fetch("http://heartnest/api/health")
               .then(async (response) => ({ response, body: await response.json() }))
               .then(({ response, body }) => {
-                if (!response.ok || body.ok !== true || body.authMode !== "provider") process.exit(1)
+                if (!response.ok || body.ok !== true || body.authMode !== "provider" || body.capabilities?.avatarUpload !== true) process.exit(1)
               })
               .catch(() => process.exit(1))
-          '
+          '; then
+            kubectl -n "$NAMESPACE" rollout undo deployment/heartnest || true
+            exit 1
+          fi
 
           restore_legacy_ingress() {
             trap - ERR
@@ -181,7 +184,7 @@ jobs:
           fi
           kubectl apply -f "$RUNNER_TEMP/app-ingress.yaml"
 
-          if ! curl --fail --show-error --silent --retry 10 --retry-delay 3 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true and .authMode == "provider"'; then
+          if ! curl --fail --show-error --silent --retry 10 --retry-delay 3 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true and .authMode == "provider" and .capabilities.avatarUpload == true'; then
             restore_legacy_ingress
             kubectl -n "$NAMESPACE" rollout undo deployment/heartnest || true
             exit 1

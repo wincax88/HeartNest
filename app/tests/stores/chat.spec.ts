@@ -30,6 +30,46 @@ describe('chat store', () => {
     expect(store.messages).toHaveLength(0)
   })
 
+  it('clears the previous companion history while loading the next chat', async () => {
+    const store = useChatStore()
+    await store.send('Mika 的对话')
+    const loading = store.load('luna')
+    expect(store.messages).toHaveLength(0)
+    expect(store.loaded).toBe(false)
+    await loading
+    expect(store.companionId).toBe('luna')
+    expect(store.loaded).toBe(true)
+  })
+
+  it('ignores history arriving after another companion has been loaded', async () => {
+    const store = useChatStore()
+    const oldThread = await apiMock.getChat('mika')
+    let finishLoading!: (value: typeof oldThread) => void
+    apiMock.getChat.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve }))
+    const oldLoad = store.load('mika')
+    await store.load('aiden')
+    await store.send('Aiden 的对话')
+
+    finishLoading(oldThread)
+    await oldLoad
+    expect(store.companionId).toBe('aiden')
+    expect(store.messages[0].content).toBe('Aiden 的对话')
+  })
+
+  it('keeps a late reply from the previous companion out of the current chat', async () => {
+    const store = useChatStore()
+    const oldReply = await apiMock.sendMessage('mika', { text: '旧对话', clientMessageId: 'old' })
+    let finishReply!: (value: typeof oldReply) => void
+    apiMock.sendMessage.mockImplementationOnce(() => new Promise(resolve => { finishReply = resolve }))
+    const oldSend = store.send('旧对话')
+    await store.load('luna')
+    finishReply(oldReply)
+    await oldSend
+    expect(store.companionId).toBe('luna')
+    expect(store.messages).toHaveLength(0)
+    expect(store.isReplying).toBe(false)
+  })
+
   it('marks a rejected message as failed so it can be retried', async () => {
     apiMock.sendMessage.mockRejectedValueOnce(new Error('请求失败'))
     const store = useChatStore()

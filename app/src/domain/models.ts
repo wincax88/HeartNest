@@ -120,6 +120,13 @@ export interface ReminderSchedule {
   nextDeliveryAt: string
 }
 
+export interface NotificationConfiguration {
+  wechat: { available: boolean; templateId: string | null }
+  app: { available: boolean }
+}
+
+export type ReminderInput = Omit<ReminderSchedule, 'id' | 'nextDeliveryAt'> & { target: Record<string, string>; payload: Record<string, unknown> }
+
 export interface AppPreferences {
   notificationsEnabled: boolean
   replyStyle: 'gentle' | 'concise' | 'reflective'

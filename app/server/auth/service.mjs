@@ -24,6 +24,23 @@ export function createAuthService({ repositories, tokenService, providers, ident
   }
 
   return {
+    async resolveProviderSubject(userId, provider, code) {
+      if (typeof code !== 'string' || !code.trim()) throw authError(400, 'INVALID_PROVIDER_CODE', '请重新授权微信提醒')
+      const adapter = providers[provider]
+      if (!adapter) throw authError(400, 'INVALID_PROVIDER', '不支持的授权方式')
+      let identity
+      try { identity = await adapter.exchange(code) }
+      catch (error) {
+        // A stale WeChat code is not an expired HeartNest session.
+        if (error.status === 401) throw authError(400, 'NOTIFICATION_PROVIDER_AUTH_FAILED', '微信授权未完成，请重新尝试')
+        throw error
+      }
+      if (!identity?.subject || identity.provider !== provider) throw authError(502, 'INVALID_PROVIDER_RESPONSE', '微信授权返回了无效身份')
+      const matches = await repositories.identityBelongsToUser(userId, provider, identityHash(identityHashKey, `${provider}:${identity.subject}`))
+      if (!matches) throw authError(403, 'NOTIFICATION_IDENTITY_MISMATCH', '微信身份与当前账号不一致，请重新登录')
+      return identity.subject
+    },
+
     async login({ provider, code, deviceSummary = null }) {
       const adapter = providers[provider]
       if (!adapter) throw authError(400, 'INVALID_PROVIDER', '不支持的登录方式')

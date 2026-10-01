@@ -13,15 +13,25 @@ export const useChatStore = defineStore('chat', {
     messages: [] as ChatMessage[],
     isReplying: false,
     loaded: false,
+    loadVersion: 0,
     error: '',
     errorCode: '',
     favoriteByMessage: {} as Record<string, string>,
   }),
   actions: {
     async load(companionId: CompanionId) {
+      if (this.companionId !== companionId) {
+        this.messages = []
+        this.favoriteByMessage = {}
+        this.isReplying = false
+        this.error = ''
+        this.errorCode = ''
+      }
       this.companionId = companionId
       this.loaded = false
+      const version = ++this.loadVersion
       const thread = await api.getChat(companionId)
+      if (version !== this.loadVersion) return
       this.messages = thread.messages
       this.loaded = true
     },
@@ -29,6 +39,7 @@ export const useChatStore = defineStore('chat', {
       const content = text.trim()
       if (!content || this.isReplying) return
 
+      const companionId = this.companionId
       const id = existingId || messageId('user')
       const existingIndex = this.messages.findIndex((message) => message.id === id)
       if (existingIndex === -1) {
@@ -40,18 +51,20 @@ export const useChatStore = defineStore('chat', {
       this.error = ''
       this.errorCode = ''
       try {
-        const result = await api.sendMessage(this.companionId, { text: content, moodId: this.moodId, clientMessageId: id })
+        const result = await api.sendMessage(companionId, { text: content, moodId: this.moodId, clientMessageId: id })
+        if (companionId !== this.companionId) return
         const pendingIndex = this.messages.findIndex((message) => message.id === id)
         if (pendingIndex !== -1) this.messages[pendingIndex] = result.userMessage
         if (!this.messages.some((message) => message.id === result.companionMessage.id)) this.messages.push(result.companionMessage)
       } catch (error) {
+        if (companionId !== this.companionId) return
         const pendingIndex = this.messages.findIndex((message) => message.id === id)
         if (pendingIndex !== -1) this.messages[pendingIndex] = { ...this.messages[pendingIndex], status: 'failed' }
         this.error = error instanceof Error ? error.message : '发送失败'
         this.errorCode = typeof error === 'object' && error && 'code' in error ? String(error.code) : 'SEND_FAILED'
         throw error
       } finally {
-        this.isReplying = false
+        if (companionId === this.companionId) this.isReplying = false
       }
     },
     async retry(message: ChatMessage) {

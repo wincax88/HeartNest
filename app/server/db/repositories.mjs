@@ -31,6 +31,37 @@ function mapMessage(row) {
 
 export function createRepositories(pool) {
   return {
+    async getUserProfile(userId) {
+      const result = await pool.query("SELECT * FROM users WHERE id = $1 AND status = 'active'", [userId])
+      if (!result.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+      return mapUser(result.rows[0])
+    },
+
+    async saveUserAvatar(userId, data) {
+      return withTransaction(pool, async (client) => {
+        const user = await client.query("SELECT avatar_url FROM users WHERE id = $1 AND status = 'active' FOR UPDATE", [userId])
+        if (!user.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+        const result = await client.query('INSERT INTO user_avatars (user_id, data) VALUES ($1, $2) RETURNING id', [userId, data])
+        // Retain the saved avatar and the five latest choices, so cancelling an edit cannot break the saved image.
+        await client.query(
+          `DELETE FROM user_avatars WHERE user_id = $1
+           AND ('/api/avatars/' || id::text) IS DISTINCT FROM $2
+           AND id NOT IN (SELECT id FROM user_avatars WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 5)`,
+          [userId, user.rows[0].avatar_url],
+        )
+        return result.rows[0].id
+      })
+    },
+
+    async getPublishedAvatar(id) {
+      const result = await pool.query(
+        `SELECT a.data FROM user_avatars a JOIN users u ON u.id = a.user_id
+         WHERE a.id = $1 AND u.status = 'active' AND u.avatar_url = ('/api/avatars/' || a.id::text)`,
+        [id],
+      )
+      return result.rows[0] || null
+    },
+
     async createUser({ displayName = '新朋友', avatarUrl = null, timeZone = 'Asia/Shanghai' } = {}) {
       const result = await pool.query(
         `INSERT INTO users (display_name, avatar_url, time_zone)
@@ -76,6 +107,11 @@ export function createRepositories(pool) {
         )
         return mapUser(user)
       })
+    },
+
+    async identityBelongsToUser(userId, provider, subjectHash) {
+      const result = await pool.query('SELECT 1 FROM user_identities WHERE user_id = $1 AND provider = $2 AND subject_hash = $3', [userId, provider, subjectHash])
+      return result.rowCount === 1
     },
 
     async createSession({ userId, refreshHash, expiresAt, deviceSummary = null }) {
@@ -494,6 +530,11 @@ export function createRepositories(pool) {
       return { channel: result.rows[0].channel, templateId: result.rows[0].template_id, status: result.rows[0].status }
     },
 
+    async getNotificationAuthorization(userId, templateId) {
+      const result = await pool.query("SELECT subject FROM notification_authorizations WHERE user_id = $1 AND channel = 'wechat' AND template_id = $2 AND status = 'authorized'", [userId, templateId])
+      return result.rows[0] || null
+    },
+
     async notificationTargetAuthorized(userId, channel, target) {
       if (channel === 'wechat') {
         const result = await pool.query(
@@ -567,7 +608,12 @@ export function createRepositories(pool) {
              ON CONFLICT (schedule_id, scheduled_for) DO NOTHING`,
             [row.id, row.user_id, row.channel, row.payload, row.target, row.next_delivery_at],
           )
-          await client.query('UPDATE reminder_schedules SET next_delivery_at = next_delivery_at + interval \'1 day\', updated_at = now() WHERE id = $1', [row.id])
+          if (row.channel === 'wechat') {
+            // Each accepted subscription creates one reminder; do not assume a permanent grant.
+            await client.query('UPDATE reminder_schedules SET enabled = false, updated_at = now() WHERE id = $1', [row.id])
+          } else {
+            await client.query('UPDATE reminder_schedules SET next_delivery_at = next_delivery_at + interval \'1 day\', updated_at = now() WHERE id = $1', [row.id])
+          }
         }
         return due.rowCount
       })
@@ -614,13 +660,19 @@ export function createRepositories(pool) {
     },
 
     async updateUserProfile(userId, { displayName, avatarUrl }) {
-      const result = await pool.query(
-        `UPDATE users SET display_name = $2, avatar_url = $3, updated_at = now()
-         WHERE id = $1 AND status = 'active' RETURNING *`,
-        [userId, displayName, avatarUrl],
-      )
-      if (!result.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
-      return mapUser(result.rows[0])
+      return withTransaction(pool, async (client) => {
+        const user = await client.query("SELECT * FROM users WHERE id = $1 AND status = 'active' FOR UPDATE", [userId])
+        if (!user.rowCount) throw Object.assign(new Error('用户不存在'), { status: 404, code: 'USER_NOT_FOUND' })
+        if (avatarUrl?.startsWith('/api/avatars/')) {
+          const avatar = await client.query('SELECT 1 FROM user_avatars WHERE id = $1 AND user_id = $2', [avatarUrl.slice('/api/avatars/'.length), userId])
+          if (!avatar.rowCount) throw Object.assign(new Error('请重新选择头像'), { status: 400, code: 'INVALID_AVATAR_URL' })
+        }
+        const result = await client.query(
+          `UPDATE users SET display_name = $2, avatar_url = $3, updated_at = now() WHERE id = $1 RETURNING *`,
+          [userId, displayName, avatarUrl === undefined ? user.rows[0].avatar_url : avatarUrl],
+        )
+        return mapUser(result.rows[0])
+      })
     },
 
     async favoriteMessage(userId, messageId) {

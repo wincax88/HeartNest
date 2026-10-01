@@ -9,16 +9,23 @@ function validDate(value) {
 export function createContentService({ repositories, avatarOrigins = [] }) {
   return {
     async updateProfile(userId, patch) {
-      const displayName = patch.displayName?.trim()
+      const displayName = typeof patch.displayName === 'string' ? patch.displayName.trim() : ''
       if (!displayName || displayName.length > 30) throw contentError(400, 'INVALID_DISPLAY_NAME', '昵称必须为 1–30 个字符')
-      let avatarUrl = patch.avatarUrl || null
+      if (patch.avatarUrl != null && typeof patch.avatarUrl !== 'string') throw contentError(400, 'INVALID_AVATAR_URL', '头像地址无效')
+      let avatarUrl = patch.avatarUrl === undefined ? undefined : (patch.avatarUrl || null)
       if (avatarUrl) {
-        let parsed
-        try { parsed = new URL(avatarUrl) } catch { throw contentError(400, 'INVALID_AVATAR_URL', '头像地址无效') }
-        if (parsed.protocol !== 'https:' || !avatarOrigins.includes(parsed.origin)) throw contentError(400, 'INVALID_AVATAR_URL', '头像地址不受支持')
-        avatarUrl = parsed.toString()
+        if (!/^\/api\/avatars\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(avatarUrl)) {
+          let parsed
+          try { parsed = new URL(avatarUrl) } catch { throw contentError(400, 'INVALID_AVATAR_URL', '头像地址无效') }
+          if (parsed.protocol !== 'https:' || !avatarOrigins.includes(parsed.origin)) throw contentError(400, 'INVALID_AVATAR_URL', '头像地址不受支持')
+          if (parsed.pathname.startsWith('/api/avatars/')) {
+            if (!/^\/api\/avatars\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(parsed.pathname)) throw contentError(400, 'INVALID_AVATAR_URL', '头像地址无效')
+            avatarUrl = parsed.pathname
+          } else avatarUrl = parsed.toString()
+        }
       }
-      return repositories.updateUserProfile(userId, { displayName, avatarUrl })
+      const user = await repositories.updateUserProfile(userId, { displayName, avatarUrl })
+      return { displayName: user.displayName, avatar: user.avatarUrl || null }
     },
     favoriteMessage: (userId, messageId) => repositories.favoriteMessage(userId, messageId),
     listFavorites: (userId) => repositories.listFavorites(userId),

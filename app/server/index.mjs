@@ -19,6 +19,7 @@ import { createNotificationWorker } from './notifications/worker.mjs'
 import { createWechatNotificationAdapter } from './notifications/wechat.mjs'
 import { createAppPushAdapter } from './notifications/app-push.mjs'
 import { createContentService } from './content.mjs'
+import { createAvatarService } from './avatars.mjs'
 import { createSafeResponder } from './safety.mjs'
 import { createStore } from './store.mjs'
 
@@ -43,7 +44,13 @@ const paymentService = repositories ? createPaymentService({
   repositories,
   adapter: createWechatPayAdapter(config.wechatPay),
 }) : null
-const notificationService = repositories ? createNotificationService({ repositories }) : null
+const notificationService = repositories ? createNotificationService({
+  repositories,
+  wechatReminder: config.wechatReminder,
+  resolveWechatSubject: config.wechat.miniAppId && config.wechat.miniSecret
+    ? (userId, code) => authService.resolveProviderSubject(userId, 'wechat_mini_program', code) : null,
+  appEnabled: config.features.appPush,
+}) : null
 const notificationWorker = repositories ? createNotificationWorker({
   repositories,
   adapters: {
@@ -56,8 +63,9 @@ const contentService = repositories ? createContentService({
   avatarOrigins: (process.env.AVATAR_ALLOWED_ORIGINS || 'https://heartnest-ns-i61rahoe.gzg.sealos.run').split(',').map((value) => value.trim()).filter(Boolean),
 }) : null
 const responder = createDeepSeekResponder()
+const avatarService = repositories ? createAvatarService({ repositories }) : null
 const safeResponder = createSafeResponder({ responder })
-const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService, contentService, repositories })
+const app = createApi({ store: createStore(dataFile), responder, safeResponder, authService, privacyService, entitlementService, paymentService, notificationService, contentService, avatarService, repositories })
 const staticRoot = resolve(process.env.HEARTNEST_STATIC_ROOT || './dist/build/h5')
 
 if (notificationWorker) {

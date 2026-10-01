@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import sharp from 'sharp'
 import { createApi } from '../../server/app.mjs'
 import { createAuthService } from '../../server/auth/service.mjs'
 import { createTokenService } from '../../server/auth/tokens.mjs'
@@ -14,6 +15,7 @@ import { createEntitlementService } from '../../server/entitlements.mjs'
 import { createPaymentService } from '../../server/payments/service.mjs'
 import { createNotificationService } from '../../server/notifications/service.mjs'
 import { createContentService } from '../../server/content.mjs'
+import { createAvatarService } from '../../server/avatars.mjs'
 import { createStore } from '../../server/store.mjs'
 import { createE2EAdapters } from './test-adapters.mjs'
 
@@ -35,6 +37,7 @@ try {
     paymentService: createPaymentService({ repositories, adapter: adapters.payment }),
     notificationService: createNotificationService({ repositories }),
     contentService: createContentService({ repositories, avatarOrigins: ['https://cdn.heartnest.test'] }), repositories,
+    avatarService: createAvatarService({ repositories }),
   })
   server = createServer(app)
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -60,8 +63,17 @@ try {
   if (favorite.status !== 201) throw new Error(`Favorite failed: ${favorite.status}; message=${JSON.stringify(chat.userMessage)}; body=${await favorite.text()}`)
   const favorites = await request('/favorites', {}, token).then((response) => response.json())
   if (favorites.length !== 1) throw new Error('Favorite was not persisted')
-  const profile = await request('/profile', { method: 'PATCH', body: JSON.stringify({ displayName: 'E2E 用户', avatarUrl: 'https://cdn.heartnest.test/e2e.png' }) }, token)
-  if (!profile.ok || (await profile.json()).displayName !== 'E2E 用户') throw new Error('Profile update failed')
+  const image = await sharp({ create: { width: 24, height: 32, channels: 3, background: '#be8fac' } }).jpeg().toBuffer()
+  const avatarForm = new FormData()
+  avatarForm.append('avatar', new Blob([image], { type: 'image/jpeg' }), 'avatar.jpg')
+  const uploaded = await fetch(`${base}/profile/avatar`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: avatarForm })
+  if (uploaded.status !== 201) throw new Error(`Avatar upload failed: ${uploaded.status}`)
+  const { avatarUrl } = await uploaded.json()
+  const profile = await request('/profile', { method: 'PATCH', body: JSON.stringify({ displayName: 'E2E 用户', avatarUrl }) }, token)
+  const savedProfile = await profile.json()
+  if (!profile.ok || savedProfile.displayName !== 'E2E 用户' || savedProfile.avatar !== avatarUrl) throw new Error('Profile update failed')
+  const publishedAvatar = await fetch(`${base.slice(0, -4)}${avatarUrl}`)
+  if (!publishedAvatar.ok || publishedAvatar.headers.get('content-type') !== 'image/webp' || !(await publishedAvatar.arrayBuffer()).byteLength) throw new Error('Saved avatar is unavailable')
 
   const deviceToken = `device-${identity}`
   await request('/notifications/devices', { method: 'POST', body: JSON.stringify({ platform: 'app', token: deviceToken }) }, token)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import ChatBubble from '@/components/ChatBubble.vue'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import MemoryPrompt from '@/components/MemoryPrompt.vue'
@@ -20,21 +21,24 @@ const loadError = ref('')
 const { online } = useNetworkState()
 const companion = computed(() => bootstrapStore.companionById[chatStore.companionId])
 
-const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
-const currentPage = currentPages[currentPages.length - 1] as { options?: Record<string, string> } | undefined
-const routeId = currentPage?.options?.id as CompanionId | undefined
-if (routeId) chatStore.companionId = routeId
+const routeId = ref<CompanionId>()
+onLoad((options) => { routeId.value = options?.id as CompanionId | undefined })
 
-onMounted(async () => {
+async function loadConversation() {
+  loadError.value = ''
   try {
     await bootstrapStore.initialize()
-    if (!bootstrapStore.companionById[chatStore.companionId]) chatStore.companionId = 'mika'
+    const requestedId = routeId.value ?? appStore.selectedCompanionId
+    const id = bootstrapStore.companionById[requestedId] ? requestedId : appStore.selectedCompanionId
+    if (id !== appStore.selectedCompanionId) await appStore.selectCompanion(id)
     chatStore.moodId = appStore.selectedMoodId
-    await chatStore.load(chatStore.companionId)
+    await chatStore.load(id)
   } catch (error) { loadError.value = error instanceof Error ? error.message : '对话加载失败'; showError(error) }
-})
+}
 
-function reload() { loadError.value = ''; chatStore.load(chatStore.companionId).catch((error) => { loadError.value = error instanceof Error ? error.message : '对话加载失败' }) }
+onMounted(loadConversation)
+
+function reload() { return loadConversation() }
 
 function showError(error: unknown) {
   uni.showToast({ title: error instanceof Error ? error.message : '操作失败', icon: 'none' })
@@ -42,7 +46,7 @@ function showError(error: unknown) {
 
 async function send() {
   const content = draft.value.trim()
-  if (!content || chatStore.isReplying) return
+  if (!content || chatStore.isReplying || !chatStore.loaded) return
   try { await chatStore.send(content); draft.value = '' } catch (error) { showError(error) }
   await nextTick()
 }
@@ -109,7 +113,7 @@ function goBack() {
             v-model="draft"
             data-testid="chat-input"
             class="composer-input"
-            :disabled="chatStore.isReplying || !online"
+            :disabled="!chatStore.loaded || chatStore.isReplying || !online"
             placeholder="想说什么都可以…"
             placeholder-class="composer-placeholder"
             confirm-type="send"
@@ -118,7 +122,7 @@ function goBack() {
           <button
             data-testid="chat-send"
             class="send-button"
-            :disabled="chatStore.isReplying || !draft.trim() || !online"
+            :disabled="!chatStore.loaded || chatStore.isReplying || !draft.trim() || !online"
             aria-label="发送"
             @click="send"
           >

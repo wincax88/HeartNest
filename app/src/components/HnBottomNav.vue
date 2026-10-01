@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import HnAction from './HnAction.vue'
 type Destination = 'home' | 'companions' | 'review' | 'profile'
 
 defineProps<{ active: Destination }>()
@@ -15,20 +14,24 @@ const items: Array<{ id: Destination; label: string; icon: string }> = [
 
 <template>
   <view class="bottom-nav" role="tablist" aria-label="主导航">
-    <HnAction
+    <button
       v-for="item in items"
       :key="item.id"
       :data-testid="`nav-${item.id}`"
       class="bottom-nav__item"
       :class="{ 'is-active': active === item.id }"
+      type="button"
       role="tab"
-      :label="item.label"
-      :selected="active === item.id"
-      @activate="emit('navigate', item.id)"
+      tabindex="0"
+      :aria-label="item.label"
+      :aria-selected="active === item.id"
+      @click="emit('navigate', item.id)"
+      @keydown.enter.prevent="emit('navigate', item.id)"
+      @keydown.space.prevent="emit('navigate', item.id)"
     >
       <uni-icons :type="item.icon" :size="25" :color="active === item.id ? '#efabff' : '#c2cae8'" />
       <text>{{ item.label }}</text>
-    </HnAction>
+    </button>
   </view>
 </template>
 
@@ -55,14 +58,23 @@ const items: Array<{ id: Destination; label: string; icon: string }> = [
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4rpx;
+  justify-content: center;
+  gap: 6rpx;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 4rpx 0;
+  border: 0;
+  border-radius: 18rpx;
   color: #c2cae8;
-  font-size: 22rpx;
-  min-height: 88rpx;
+  font-size: 14px;
+  line-height: 1.4;
+  background: transparent;
 }
 
 .bottom-nav__item.is-active {
   color: #efabff;
   text-shadow: 0 0 18rpx rgba(227, 134, 255, 0.7);
 }
+.bottom-nav__item:active { background: rgba(181, 155, 225, .12); }
 </style>

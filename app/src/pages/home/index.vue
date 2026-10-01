@@ -40,7 +40,7 @@ function startChat() {
 
 function navigate(destination: string) {
   const routes: Record<string, string> = {
-    home: '/pages/home/index', companions: '/pages/companion/index?id=mika', review: '/pages/review/index', profile: '/pages/profile/index',
+    home: '/pages/home/index', companions: `/pages/companion/index?id=${appStore.selectedCompanionId}`, review: '/pages/review/index', profile: '/pages/profile/index',
   }
   uni.reLaunch({ url: routes[destination] })
 }

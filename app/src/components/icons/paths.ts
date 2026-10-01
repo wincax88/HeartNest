@@ -2,6 +2,7 @@ export const iconPaths: Record<string, string[]> = {
   'heart-filled': ['M12 21s-7.2-4.35-9.6-8.72C.46 8.75 2.08 4.5 6.08 4.08A5.31 5.31 0 0 1 12 7.09a5.31 5.31 0 0 1 5.92-3.01c4 .42 5.62 4.67 3.68 8.2C19.2 16.65 12 21 12 21Z'],
   'home-filled': ['M3 10.8 12 3l9 7.8V21h-6v-6H9v6H3V10.8Z'],
   'person-filled': ['M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-5 0-8 2.7-8 6v1h16v-1c0-3.3-3-6-8-6Z'],
+  'camera-filled': ['M4 6h3l2-3h6l2 3h3a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm8 3a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Zm0 2a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z'],
   'cloud-filled': ['M7.5 19h10a4.5 4.5 0 0 0 .56-8.96A6.5 6.5 0 0 0 5.5 11.5 3.75 3.75 0 0 0 7.5 19Z'],
   'calendar-filled': ['M5 3h2v2h10V3h2v2h2v16H3V5h2V3Zm0 7v9h14v-9H5Z'],
   calendar: ['M6 2h2v3h8V2h2v3h3v17H3V5h3V2Zm13 9H5v9h14v-9ZM5 7v2h14V7H5Z'],

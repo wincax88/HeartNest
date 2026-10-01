@@ -7,6 +7,7 @@ import SettingsPage from '@/pages/settings/index.vue'
 import MembershipPage from '@/pages/membership/index.vue'
 import { useProfileStore } from '@/stores/profile'
 import { useReviewStore } from '@/stores/review'
+import { useAppStore } from '@/stores/app'
 
 describe('review and profile flows', () => {
   const navigateTo = vi.fn()
@@ -58,6 +59,15 @@ describe('review and profile flows', () => {
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/membership/index' })
   })
 
+  it.each([ReviewPage, ProfilePage])('opens the selected companion from bottom navigation', async (page) => {
+    const pinia = createPinia()
+    const wrapper = mount(page, { global: { plugins: [pinia] } })
+    await flushPromises()
+    await useAppStore(pinia).selectCompanion('aiden')
+    await wrapper.get('[data-testid="nav-companions"]').trigger('click')
+    expect(uni.reLaunch).toHaveBeenCalledWith({ url: '/pages/companion/index?id=aiden' })
+  })
+
   it('opens profile menu destinations', async () => {
     const reLaunch = vi.fn()
     vi.stubGlobal('uni', {
@@ -84,6 +94,7 @@ describe('review and profile flows', () => {
   it('opens platform-backed notification settings', async () => {
     const pinia = createPinia()
     const wrapper = mount(SettingsPage, { global: { plugins: [pinia] } })
+    await flushPromises()
     await wrapper.get('[data-testid="notification-settings-row"]').trigger('click')
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/notification-settings/index' })
   })
@@ -91,10 +102,12 @@ describe('review and profile flows', () => {
   it('toggles memory prompts and opens settings actions', async () => {
     const pinia = createPinia()
     const wrapper = mount(SettingsPage, { global: { plugins: [pinia] } })
+    await flushPromises()
     const profileStore = useProfileStore(pinia)
 
     await wrapper.get('[data-testid="memory-prompt-toggle"]').trigger('click')
     expect(profileStore.preferences.memoryPromptsEnabled).toBe(false)
+    await flushPromises()
 
     await wrapper.get('[data-testid="reply-style-row"]').trigger('click')
     expect(showActionSheet).toHaveBeenCalled()

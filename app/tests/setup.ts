@@ -3,7 +3,7 @@ import { companions, memories, moods, memberships, preferences, profile, reviewD
 
 export const apiMock = {
   bootstrap: vi.fn(async () => ({
-    companions, moods, profile, membership: memberships.free, preferences,
+    companions, moods, profile: { ...profile }, membership: memberships.free, preferences: { ...preferences },
     state: { selectedMoodId: 'calm', selectedCompanionId: 'mika', onboardingCompleted: false },
     reviewDays, memories,
     stats: { conversations: 0, memories: 3, activeDays: 7 },
@@ -31,15 +31,18 @@ export const apiMock = {
   favoriteMessage: vi.fn(async (messageId) => ({ id: `favorite-${messageId}`, targetId: messageId })),
   deleteFavorite: vi.fn(async () => undefined),
   getFavorites: vi.fn(async () => []),
-  updateProfile: vi.fn(async (profile) => ({ ...profile, streakDays: 7, preferredCompanionId: 'mika' })),
+  updateProfile: vi.fn(async (input) => ({ displayName: input.displayName, avatar: input.avatarUrl || undefined })),
+  uploadAvatar: vi.fn(async () => ({ avatarUrl: '/api/avatars/12345678-1234-1234-1234-123456789abc' })),
   getReview: vi.fn(async () => []),
   getEntitlements: vi.fn(async () => ({ plan: 'free', capabilities: { daily_chat: { enabled: true, limit: 20, used: 0, remaining: 20, resetAt: null } } })),
   createPaymentOrder: vi.fn(async () => ({ id: 'order-1', status: 'pending', amount: 1800, currency: 'CNY' })),
   getPaymentOrder: vi.fn(async () => ({ id: 'order-1', status: 'pending', amount: 1800, currency: 'CNY' })),
   registerNotificationDevice: vi.fn(async () => ({ id: 'device-1' })),
   authorizeNotification: vi.fn(async () => ({ status: 'authorized' })),
+  getNotificationConfiguration: vi.fn(async () => ({ wechat: { available: true, templateId: 'reminder-template' }, app: { available: true } })),
   getReminders: vi.fn(async () => []),
   createReminder: vi.fn(async (input) => ({ id: 'reminder-1', ...input, nextDeliveryAt: new Date().toISOString() })),
+  updateReminder: vi.fn(async (id, input) => ({ id, ...input, nextDeliveryAt: new Date().toISOString() })),
   deleteReminder: vi.fn(async () => undefined),
 }
 
@@ -54,6 +57,6 @@ vi.mock('@/services/api', () => ({
 }))
 
 afterEach(() => {
-  localStorage.clear()
+  globalThis.localStorage?.clear()
   vi.clearAllMocks()
 })

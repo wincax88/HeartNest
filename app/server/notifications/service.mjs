@@ -51,26 +51,53 @@ export function nextDelivery(schedule, now = new Date()) {
   return candidate
 }
 
-export function createNotificationService({ repositories, clock = () => new Date() }) {
+export function createNotificationService({ repositories, clock = () => new Date(), wechatReminder = {}, resolveWechatSubject = null, appEnabled = true }) {
+  const wechatEnabled = Boolean(wechatReminder.templateId && wechatReminder.data && resolveWechatSubject)
+  const error = (status, code, message) => Object.assign(new Error(message), { status, code })
+  function requireWechatConfigured() {
+    if (!wechatEnabled) throw error(503, 'WECHAT_REMINDER_NOT_CONFIGURED', '微信提醒暂未开通，请稍后再试')
+  }
+  async function prepareSchedule(userId, input) {
+    const next = nextDelivery(input, clock())
+    if (input.channel !== 'wechat') return { ...input, nextDeliveryAt: next }
+    requireWechatConfigured()
+    const authorization = await repositories.getNotificationAuthorization(userId, wechatReminder.templateId)
+    if (!authorization?.subject) throw error(403, 'NOTIFICATION_AUTH_REQUIRED', '请先允许微信订阅提醒，再保存')
+    const formattedTime = new Intl.DateTimeFormat('sv-SE', { timeZone: input.timeZone || 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(next)
+    const payload = Object.fromEntries(Object.entries(wechatReminder.data).map(([key, field]) => [key, { value: field.value.replaceAll('{{time}}', formattedTime) }]))
+    return { ...input, nextDeliveryAt: next, payload, target: { templateId: wechatReminder.templateId, openId: authorization.subject, page: 'pages/home/index' } }
+  }
   async function requireAuthorizedTarget(userId, input) {
     if (!['wechat', 'app'].includes(input.channel)) throw Object.assign(new Error('提醒渠道无效'), { status: 400, code: 'INVALID_NOTIFICATION_CHANNEL' })
+    if (input.channel === 'wechat') {
+      requireWechatConfigured()
+      if (input.target?.templateId !== wechatReminder.templateId) throw error(400, 'INVALID_NOTIFICATION_TEMPLATE', '提醒模板已更新，请重新打开页面')
+    } else if (!appEnabled) throw error(503, 'APP_PUSH_NOT_CONFIGURED', 'App 提醒暂未开通，请稍后再试')
     const authorized = await repositories.notificationTargetAuthorized(userId, input.channel, input.target || {})
-    if (!authorized) throw Object.assign(new Error('通知授权已失效'), { status: 403, code: 'NOTIFICATION_AUTH_REQUIRED' })
+    if (!authorized) throw error(403, 'NOTIFICATION_AUTH_REQUIRED', '请先允许提醒通知，再保存')
   }
 
   return {
-    registerDevice: (userId, input) => repositories.upsertNotificationDevice(userId, input),
-    authorizeTemplate: (userId, input) => repositories.upsertNotificationAuthorization(userId, input),
+    configuration: () => ({ wechat: { available: wechatEnabled, templateId: wechatEnabled ? wechatReminder.templateId : null }, app: { available: appEnabled } }),
+    registerDevice: (userId, input) => {
+      if (!appEnabled) throw error(503, 'APP_PUSH_NOT_CONFIGURED', 'App 提醒暂未开通，请稍后再试')
+      if (input.platform !== 'app' || typeof input.token !== 'string' || !input.token.trim()) throw error(400, 'INVALID_NOTIFICATION_DEVICE', '请重新授权设备通知')
+      return repositories.upsertNotificationDevice(userId, input)
+    },
+    async authorizeTemplate(userId, input) {
+      requireWechatConfigured()
+      if (input.channel !== 'wechat' || input.templateId !== wechatReminder.templateId) throw error(400, 'INVALID_NOTIFICATION_TEMPLATE', '提醒模板已更新，请重新打开页面')
+      const subject = await resolveWechatSubject(userId, input.code)
+      return repositories.upsertNotificationAuthorization(userId, { channel: 'wechat', templateId: wechatReminder.templateId, subject, status: 'authorized' })
+    },
     listSchedules: (userId) => repositories.listReminderSchedules(userId),
     async createSchedule(userId, input) {
       await requireAuthorizedTarget(userId, input)
-      const next = nextDelivery(input, clock())
-      return repositories.createReminderSchedule(userId, { ...input, nextDeliveryAt: next })
+      return repositories.createReminderSchedule(userId, await prepareSchedule(userId, input))
     },
     async updateSchedule(userId, scheduleId, input) {
       await requireAuthorizedTarget(userId, input)
-      const next = nextDelivery(input, clock())
-      return repositories.updateReminderSchedule(userId, scheduleId, { ...input, nextDeliveryAt: next })
+      return repositories.updateReminderSchedule(userId, scheduleId, await prepareSchedule(userId, input))
     },
     deleteSchedule: (userId, scheduleId) => repositories.deleteReminderSchedule(userId, scheduleId),
   }

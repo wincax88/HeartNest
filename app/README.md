@@ -43,6 +43,10 @@ PostgreSQL 是生产权威数据源。旧 `data/heartnest.json` 仅用于一次�
 
 ## 质量检查
 
+编辑资料支持微信原生头像、昵称填写：昵称由用户在输入框里选择微信昵称或自行输入，头像按钮使用 `chooseAvatar`。这两项能力需要微信基础库 2.21.2 或以上；较低版本保留手动昵称及图片选择。参考[微信官方头像昵称填写组件说明](https://github.com/wechat-miniprogram/mp-user-avatar/blob/master/README.md)。H5 与 App 使用相册或相机选择头像。
+
+`POST /api/profile/avatar` 接收已登录用户的 multipart `avatar` 文件（JPG/PNG/WebP，最多 2 MB），转换为 512px 方形 WebP 并存入 PostgreSQL。再由 `PATCH /api/profile` 保存昵称及返回的头像地址；仅修改昵称时保留原头像。`GET /api/bootstrap` 读取数据库中已保存的资料。迁移 `014_profile_avatars.sql` 随现有迁移流程执行，账户删除会级联删除头像。
+
 ```bash
 npm test
 npm run test:integration

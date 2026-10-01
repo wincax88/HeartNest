@@ -41,8 +41,8 @@ describe('HeartNest API', () => {
     const deviceBase = await startApi(join(directory, 'device.json'))
     const providerBase = await startApi(join(directory, 'provider.json'), { authService: {} })
 
-    expect(await (await fetch(`${deviceBase}/health`)).json()).toEqual({ ok: true, authMode: 'device' })
-    expect(await (await fetch(`${providerBase}/health`)).json()).toEqual({ ok: true, authMode: 'provider' })
+    expect(await (await fetch(`${deviceBase}/health`)).json()).toEqual({ ok: true, authMode: 'device', capabilities: { avatarUpload: false } })
+    expect(await (await fetch(`${providerBase}/health`)).json()).toEqual({ ok: true, authMode: 'provider', capabilities: { avatarUpload: false } })
   })
 
   it('persists real user actions and derives stats after a restart', async () => {

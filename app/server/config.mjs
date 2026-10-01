@@ -10,6 +10,15 @@ function hasAll(env, names) {
   return names.every((name) => typeof env[name] === 'string' && env[name].trim().length > 0)
 }
 
+function reminderTemplateData(value) {
+  try {
+    const data = JSON.parse(value || '')
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !Object.keys(data).length) return null
+    if (!Object.entries(data).every(([key, field]) => /^[a-z_]+\d+$/.test(key) && field && typeof field.value === 'string' && field.value.trim())) return null
+    return data
+  } catch { return null }
+}
+
 export function loadConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development'
 
@@ -44,6 +53,10 @@ export function loadConfig(env = process.env) {
       h5Secret: env.WECHAT_H5_SECRET,
     },
     wechatPay,
+    wechatReminder: {
+      templateId: env.WECHAT_REMINDER_TEMPLATE_ID?.trim() || '',
+      data: reminderTemplateData(env.WECHAT_REMINDER_TEMPLATE_DATA),
+    },
     appPush: {
       endpoint: env.APP_PUSH_ENDPOINT,
       key: env.APP_PUSH_KEY,

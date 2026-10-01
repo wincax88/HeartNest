@@ -2,6 +2,8 @@ import express from 'express'
 import { randomUUID } from 'node:crypto'
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import helmet from 'helmet'
+import multer from 'multer'
+import { MAX_AVATAR_BYTES } from './avatars.mjs'
 import { createAuthMiddleware } from './auth/middleware.mjs'
 import { companionIds, moodIds, moods } from './catalog.mjs'
 import { createObservability } from './observability.mjs'
@@ -16,7 +18,7 @@ function validateDeviceId(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9-]{16,80}$/.test(value)
 }
 
-export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null, repositories = null, observability = createObservability() }) {
+export function createApi({ store, responder, safeResponder = null, authService = null, privacyService = null, entitlementService = null, paymentService = null, notificationService = null, contentService = null, avatarService = null, repositories = null, observability = createObservability() }) {
   const app = express()
   const route = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
   app.disable('x-powered-by')
@@ -43,8 +45,15 @@ export function createApi({ store, responder, safeResponder = null, authService 
     legacyHeaders: false,
     handler: (_req, res) => res.status(429).json({ error: { code: 'CHAT_DAILY_LIMIT', message: '今天的对话额度已用完', retryAfterSeconds: 86_400 } }),
   })
-  app.get('/api/health', (_req, res) => res.json({ ok: true, authMode: authService ? 'provider' : 'device' }))
+  app.get('/api/health', (_req, res) => res.json({ ok: true, authMode: authService ? 'provider' : 'device', capabilities: { avatarUpload: Boolean(avatarService) } }))
   app.get('/metrics', observability.metricsHandler)
+
+  if (avatarService) {
+    app.get('/api/avatars/:id', route(async (req, res) => {
+      const avatar = await avatarService.getPublished(req.params.id)
+      res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=60', 'Cross-Origin-Resource-Policy': 'cross-origin' }).send(avatar.data)
+    }))
+  }
 
   if (paymentService) {
     app.post('/api/payments/wechat/callback', route(async (req, res) => {
@@ -132,6 +141,7 @@ export function createApi({ store, responder, safeResponder = null, authService 
   }
 
   if (notificationService) {
+    app.get('/api/notifications/config', route(async (_req, res) => res.json(notificationService.configuration())))
     app.post('/api/notifications/devices', route(async (req, res) => {
       res.status(201).json(await notificationService.registerDevice(req.userId, req.body || {}))
     }))
@@ -166,7 +176,27 @@ export function createApi({ store, responder, safeResponder = null, authService 
     }))
   }
 
-  app.get('/api/bootstrap', route(async (req, res) => res.json(await store.bootstrap(req.deviceId))))
+  if (avatarService) {
+    const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_AVATAR_BYTES, files: 1, fields: 0, parts: 2 } }).single('avatar')
+    const avatarLimiter = rateLimit({ windowMs: 3_600_000, limit: 20, keyGenerator: limiterKey, standardHeaders: 'draft-7', legacyHeaders: false,
+      handler: (_req, res) => res.status(429).json({ error: { code: 'AVATAR_RATE_LIMIT', message: '更换得有点频繁，请稍后再试' } }),
+    })
+    app.post('/api/profile/avatar', avatarLimiter, (req, res, next) => {
+      upload(req, res, (error) => {
+        if (error) return next(httpError(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400, 'AVATAR_UPLOAD_FAILED', error.code === 'LIMIT_FILE_SIZE' ? '请选择不超过 2 MB 的图片' : '请一次上传一张头像图片'))
+        next()
+      })
+    }, route(async (req, res) => res.status(201).json(await avatarService.upload(req.userId, req.file))))
+  }
+
+  app.get('/api/bootstrap', route(async (req, res) => {
+    const data = await store.bootstrap(req.deviceId)
+    if (repositories) {
+      const profile = await repositories.getUserProfile(req.userId)
+      data.profile = { ...data.profile, displayName: profile.displayName, avatar: profile.avatarUrl || undefined }
+    }
+    res.json(data)
+  }))
 
   app.put('/api/state', route(async (req, res) => {
     const { selectedMoodId, selectedCompanionId, onboardingCompleted } = req.body ?? {}

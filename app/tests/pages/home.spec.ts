@@ -11,7 +11,7 @@ describe('home page', () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     navigateTo.mockReset()
-    vi.stubGlobal('uni', { navigateTo, redirectTo: vi.fn(), switchTab: vi.fn(), showToast: vi.fn() })
+    vi.stubGlobal('uni', { navigateTo, redirectTo: vi.fn(), switchTab: vi.fn(), reLaunch: vi.fn(), showToast: vi.fn() })
   })
 
   it('stores the selected mood', async () => {
@@ -44,5 +44,20 @@ describe('home page', () => {
     await flushPromises()
     await wrapper.get('[data-testid="start-chat"]').trigger('click')
     expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/chat/index?id=mika' })
+  })
+
+  it.each(['luna', 'aiden'] as const)('keeps %s selected for the chat and companion navigation entries', async (id) => {
+    const pinia = createPinia()
+    const wrapper = mount(HomePage, { global: { plugins: [pinia] } })
+    await flushPromises()
+    await wrapper.get(`[data-testid="companion-${id}"]`).trigger('click')
+    await flushPromises()
+    expect(useAppStore(pinia).selectedCompanionId).toBe(id)
+    expect(navigateTo).toHaveBeenCalledWith({ url: `/pages/companion/index?id=${id}` })
+
+    await wrapper.get('[data-testid="start-chat"]').trigger('click')
+    expect(navigateTo).toHaveBeenCalledWith({ url: `/pages/chat/index?id=${id}` })
+    await wrapper.get('[data-testid="nav-companions"]').trigger('click')
+    expect(uni.reLaunch).toHaveBeenCalledWith({ url: `/pages/companion/index?id=${id}` })
   })
 })

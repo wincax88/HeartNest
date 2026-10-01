@@ -9,6 +9,8 @@ const emptyCompanionStats = {
   mika: { conversations: 0 }, luna: { conversations: 0 }, aiden: { conversations: 0 },
 } satisfies BootstrapData['companionStats']
 
+const initializations = new WeakMap<object, Promise<void>>()
+
 export const useBootstrapStore = defineStore('bootstrap', {
   state: () => ({
     companions: [] as Companion[],
@@ -33,17 +35,24 @@ export const useBootstrapStore = defineStore('bootstrap', {
       this.error = ''
     },
     async initialize(force = false) {
-      if ((this.loaded && !force) || this.loading) return
+      const existing = initializations.get(this)
+      if (existing) return existing
+      if (this.loaded && !force) return
       this.loading = true
       this.error = ''
-      try {
-        this.hydrate(await api.bootstrap())
-      } catch (error) {
-        this.error = error instanceof Error ? error.message : '数据加载失败'
-        throw error
-      } finally {
-        this.loading = false
-      }
+      const pending = (async () => {
+        try {
+          this.hydrate(await api.bootstrap())
+        } catch (error) {
+          this.error = error instanceof Error ? error.message : '数据加载失败'
+          throw error
+        } finally {
+          this.loading = false
+          initializations.delete(this)
+        }
+      })()
+      initializations.set(this, pending)
+      return pending
     },
   },
 })

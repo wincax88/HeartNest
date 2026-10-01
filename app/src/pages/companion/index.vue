@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import HnAppHeader from '@/components/HnAppHeader.vue'
 import HnGlassCard from '@/components/HnGlassCard.vue'
 import HnPrimaryButton from '@/components/HnPrimaryButton.vue'
@@ -12,13 +13,15 @@ const bootstrapStore = useBootstrapStore()
 const companion = computed(() => bootstrapStore.companionById[appStore.selectedCompanionId])
 const stats = computed(() => bootstrapStore.companionStats[appStore.selectedCompanionId])
 
-const currentPages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
-const currentPage = currentPages[currentPages.length - 1] as { options?: Record<string, string> } | undefined
-const routeId = currentPage?.options?.id as CompanionId | undefined
-if (routeId) appStore.selectedCompanionId = routeId
+const routeId = ref<CompanionId>()
+onLoad((options) => { routeId.value = options?.id as CompanionId | undefined })
 onMounted(async () => {
-  await bootstrapStore.initialize().catch(showError)
-  if (!bootstrapStore.companionById[appStore.selectedCompanionId]) appStore.selectedCompanionId = 'mika'
+  try {
+    await bootstrapStore.initialize()
+    const requestedId = routeId.value ?? appStore.selectedCompanionId
+    const id = bootstrapStore.companionById[requestedId] ? requestedId : appStore.selectedCompanionId
+    if (id !== appStore.selectedCompanionId) await appStore.selectCompanion(id)
+  } catch (error) { showError(error) }
 })
 
 function showError(error: unknown) {
